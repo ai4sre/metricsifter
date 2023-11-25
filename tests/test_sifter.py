@@ -1,0 +1,3 @@
+"""
+Test suites for spot
+"""
