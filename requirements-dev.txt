@@ -1,5 +1,7 @@
 -r requirements.txt
 
+sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b
+
 black
 ruff
 

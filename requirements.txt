@@ -4,3 +4,4 @@ scipy
 joblib
 ruptures
 statsmodels
+networkx

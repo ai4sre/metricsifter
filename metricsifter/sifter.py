@@ -7,7 +7,7 @@ from metricsifter import utils
 from metricsifter.algo import detection, segmentation
 
 
-class Sifter:
+class MetricSifter:
     def __init__(
         self,
         search_method: str = "pelt",
