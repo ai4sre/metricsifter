@@ -69,7 +69,7 @@ class Sifter:
         # STEP3: select the largest segment
         remained_metrics = self.select_largest_segment(cluster_label_to_metrics, metrics, metric_to_cps)
 
-        return X.loc[:, remained_metrics]
+        return X.loc[:, list(remained_metrics)]
 
 
     def select_largest_segment(
