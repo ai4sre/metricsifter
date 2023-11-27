@@ -29,6 +29,7 @@ def parallel_apply(df: pd.DataFrame, func: Callable, n_jobs: int = -1, **kwargs:
         return df.apply(func, **kwargs)
     else:
         ret = Parallel(n_jobs=n_jobs)(
-            delayed(type(df).apply)(df.iloc[s], func, **kwargs)
-            for s in gen_even_slices(len(df), effective_n_jobs(n_jobs)))
-        return pd.concat(ret)
+            delayed(type(df).apply)(df.iloc[:, s], func, **kwargs)
+            for s in gen_even_slices(df.size, effective_n_jobs(n_jobs))
+        )
+        return pd.concat([r for r in ret if not r.empty])
