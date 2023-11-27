@@ -5,7 +5,7 @@ Test suites for sifter
 import pandas as pd
 import pytest
 
-from metricsifter.sifter import MetricSifter
+from metricsifter.sifter import Sifter
 from tests.sample_gen.generator import generate_synthetic_data
 
 
@@ -16,6 +16,6 @@ def synthetic_data_20() -> pd.DataFrame:
 
 def test_sifter_run(synthetic_data_20):
     data = synthetic_data_20
-    sifter = MetricSifter(n_jobs=1)
+    sifter = Sifter(n_jobs=1)
     siftered_data = sifter.run(data)
     assert siftered_data.shape[1] < data.shape[1], "The number of columns should be reduced."

@@ -7,7 +7,7 @@ from metricsifter import utils
 from metricsifter.algo import detection, segmentation
 
 
-class MetricSifter:
+class Sifter:
     def __init__(
         self,
         search_method: str = "pelt",
@@ -16,7 +16,7 @@ class MetricSifter:
         penalty_adjust: float = 2.,
         bandwidth: float = 2.5,
         segment_selection_method: str = "weighted_max",
-        n_jobs: int = -1,
+        n_jobs: int = 1,
     ) -> None:
         self.search_method = search_method
         self.cost_model = cost_model
@@ -41,9 +41,9 @@ class MetricSifter:
             return X.loc[:, utils.parallel_apply(X, filter, n_jobs)]
         return X.loc[:, X.apply(filter)]
 
-    def run(self, time_series: pd.DataFrame) -> pd.DataFrame:
+    def run(self, data: pd.DataFrame) -> pd.DataFrame:
         # STEP0: simple filter
-        X: pd.DataFrame = self._filter_no_changes(time_series, n_jobs=self.n_jobs)
+        X: pd.DataFrame = self._filter_no_changes(data, n_jobs=self.n_jobs)
 
         metrics: list[str] = X.columns.tolist()
 
@@ -56,6 +56,8 @@ class MetricSifter:
             penalty_adjust=self.penalty_adjust,
             n_jobs=self.n_jobs,
         )
+        if not change_point_indexes:
+            return pd.DataFrame()
         metric_to_cps = {metric: cps for metric, cps in zip(metrics, change_point_indexes)}
 
         # STEP2: segment change points
@@ -68,7 +70,6 @@ class MetricSifter:
 
         # STEP3: select the largest segment
         remained_metrics = self.select_largest_segment(cluster_label_to_metrics, metrics, metric_to_cps)
-
         return X.loc[:, list(remained_metrics)]
 
 
