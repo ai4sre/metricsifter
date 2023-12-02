@@ -1,35 +1,22 @@
 from collections import defaultdict
-from typing import Final
 
 import numpy as np
 import scipy.signal
 from statsmodels.nonparametric.kde import KDEUnivariate
 
-NO_CHANGE_POINTS: Final[int] = -1
+from metricsifter.algo.detection import NO_CHANGE_POINTS
+
 
 def segment_nested_changepoints(
-    multi_change_points: list[list[int]],
-    metrics: list[str],
+    flatten_change_points: list[int],
+    cp_to_metrics: dict[int, list[str]],
     time_series_length: int,
     kde_bandwidth: float | str = 2.5,
-    kde_bandwidth_adjust: float = 1.,
 ) -> tuple[dict[int, set[str]], dict[int, np.ndarray]]:
-    cp_to_metrics: dict[int, list[str]] = defaultdict(list)
-    for metric, change_points in zip(metrics, multi_change_points):
-        if len(change_points) < 1:
-            cp_to_metrics[NO_CHANGE_POINTS].append(metric)  # cp == -1 means no change point
-            continue
-        for cp in change_points:
-            cp_to_metrics[cp].append(metric)
-
-    flatten_change_points: list[int] = sum(multi_change_points, [])
-    if len(flatten_change_points) == 0:
-        return {}, {}
-
     _, label_to_change_points = segment_changepoints_with_kde(
-        flatten_change_points, time_series_length=time_series_length,
+        flatten_change_points,
+        time_series_length=time_series_length,
         kde_bandwidth=kde_bandwidth,
-        kde_bandwidth_adjust=kde_bandwidth_adjust,
         unique_values=True,
     )
 
@@ -47,7 +34,6 @@ def segment_changepoints_with_kde(
     change_points: list[int],
     time_series_length: int,
     kde_bandwidth: str | float,
-    kde_bandwidth_adjust: float = 1.,
     unique_values: bool = True,
 ) -> tuple[np.ndarray, dict[int, np.ndarray]]:
     assert len(change_points) > 0, "change_points should not be empty"
@@ -57,7 +43,7 @@ def segment_changepoints_with_kde(
         return np.zeros(len(x), dtype=int), {0: np.unique(x) if unique_values else x}  # the all change points belongs to cluster 0.
 
     dens = KDEUnivariate(x)
-    dens.fit(kernel="gau", bw=kde_bandwidth, fft=True, adjust=kde_bandwidth_adjust)
+    dens.fit(kernel="gau", bw=kde_bandwidth, fft=True)
     s = np.linspace(start=0, stop=time_series_length - 1, num=time_series_length)
     e = dens.evaluate(s)
 

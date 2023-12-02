@@ -51,7 +51,7 @@ class Sifter:
         metrics: list[str] = X.columns.tolist()
 
         # STEP1: detect change points
-        change_point_indexes = detection.detect_multi_changepoints(
+        flatten_change_points, cp_to_metrics, metric_to_cps = detection.detect_multi_changepoints(
             X,
             search_method=self.search_method,
             cost_model=self.cost_model,
@@ -59,14 +59,13 @@ class Sifter:
             penalty_adjust=self.penalty_adjust,
             n_jobs=self.n_jobs,
         )
-        if not change_point_indexes:
+        if not flatten_change_points:
             return pd.DataFrame()
-        metric_to_cps = {metric: cps for metric, cps in zip(metrics, change_point_indexes)}
 
         # STEP2: segment change points
         cluster_label_to_metrics, _ = segmentation.segment_nested_changepoints(
-            multi_change_points=change_point_indexes,
-            metrics=metrics,
+            flatten_change_points=flatten_change_points,
+            cp_to_metrics=cp_to_metrics,
             time_series_length=X.shape[0],
             kde_bandwidth=self.bandwidth,
         )

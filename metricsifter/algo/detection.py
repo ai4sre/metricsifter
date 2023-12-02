@@ -1,11 +1,14 @@
 import warnings
-from typing import cast
+from collections import defaultdict
+from typing import Final
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import ruptures as rpt
 from joblib import Parallel, delayed
+
+NO_CHANGE_POINTS: Final[int] = -1
 
 
 def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
@@ -59,9 +62,21 @@ def detect_multi_changepoints(
     penalty: str | float,
     penalty_adjust: float,
     n_jobs: int = -1,
-) -> list[list[int]]:
+) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]]]:
+    metrics: list[str] = X.columns.tolist()
     multi_change_points = Parallel(n_jobs=n_jobs)(
         delayed(detect_univariate_changepoints)(X[metric].to_numpy(), search_method, cost_model, penalty, penalty_adjust)
-        for metric in X.columns.tolist()
+        for metric in metrics
     )
-    return cast(list[list[int]], multi_change_points)
+    cp_to_metrics: dict[int, list[str]] = defaultdict(list)
+    for metric, change_points in zip(metrics, multi_change_points):
+        if change_points is None or len(change_points) < 1:
+            cp_to_metrics[NO_CHANGE_POINTS].append(metric)  # cp == -1 means no change point
+            continue
+        for cp in change_points:
+            cp_to_metrics[cp].append(metric)
+
+    flatten_change_points: list[int] = sum(multi_change_points, [])
+    metric_to_cps = {metric: cps for metric, cps in zip(metrics, multi_change_points) if cps is not None}
+
+    return flatten_change_points, cp_to_metrics, metric_to_cps
