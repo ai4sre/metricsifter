@@ -12,7 +12,7 @@ class Sifter:
         self,
         search_method: str = "pelt",
         cost_model: str = "l2",
-        penalty: str = "bic",
+        penalty: str | float = "bic",
         penalty_adjust: float = 2.,
         bandwidth: float = 2.5,
         segment_selection_method: str = "weighted_max",
@@ -41,9 +41,12 @@ class Sifter:
             return X.loc[:, utils.parallel_apply(X, filter, n_jobs)]
         return X.loc[:, X.apply(filter)]
 
-    def run(self, data: pd.DataFrame) -> pd.DataFrame:
-        # STEP0: simple filter
-        X: pd.DataFrame = self._filter_no_changes(data, n_jobs=self.n_jobs)
+    def run(self, data: pd.DataFrame, without_simple_filter: bool = False) -> pd.DataFrame:
+        if without_simple_filter:
+            X = data
+        else:
+            # STEP0: simple filter
+            X = self._filter_no_changes(data, n_jobs=self.n_jobs)
 
         metrics: list[str] = X.columns.tolist()
 
