@@ -1,4 +1,4 @@
-import setuptools
+from setuptools import find_namespace_packages, setup
 
 with open("README.md", "r", encoding="UTF-8") as readme:
     long_description = readme.read()
@@ -6,7 +6,7 @@ with open("requirements.txt", "r", encoding="UTF-8") as requirements:
     install_requires = requirements.read().split("\n")
 
 
-setuptools.setup(
+setup(
     name="metricsifter",
     version="0.0.1",
     author="yuuki",
@@ -17,7 +17,7 @@ setuptools.setup(
     project_urls={
         "Bug Tracker": "https://github.com/ai4sre/metricsifter/issues",
     },
-    packages=["metricsifter"],
+    packages=find_namespace_packages(include="metricsifter.*"),
     install_requires=install_requires,
     classifiers=[
         "Programming Language :: Python :: 3.10",
