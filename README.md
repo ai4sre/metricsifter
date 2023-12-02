@@ -1,5 +1,7 @@
-# MetricSifter
+# MetricSifter: Feature Reduction of Multivariate Time Series Data for Efficient Fault Localization in Cloud Applications
 ![CI workflow](https://github.com/ai4sre/metricsifter/actions/workflows/ci.yaml/badge.svg)
+
+This repository contains code and datasets used in the experiments described in our paper.
 
 ## Introduction
 
