@@ -51,9 +51,14 @@ class RedundancyReducer(Reducer):
         for cluster in unique_clusters:
             if cluster == -1:  # ignore noise points
                 continue
+            # Indices of points in the current cluster
             indices_in_cluster = np.where(clusters == cluster)[0]
+            # Distance matrix of the current cluster
             cluster_distance_matrix = dist_matrix[np.ix_(indices_in_cluster, indices_in_cluster)]
-            medoid_index = np.argmin(cluster_distance_matrix.sum(axis=1))
+            # Calculate the sum of distances from each point to all others in the cluster
+            distance_sum = cluster_distance_matrix.sum(axis=1)
+            # Find the index of the medoid (minimum distance sum)
+            medoid_index = indices_in_cluster[distance_sum.argmin()]
             medoids.append(self.data.columns[medoid_index])
 
         return medoids

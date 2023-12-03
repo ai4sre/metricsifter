@@ -46,7 +46,7 @@ class HDBS(RedundancyReducer):
             case _:
                 raise ValueError(f"Invalid distance type: {dist_type}")
 
-        distance_matrix = pairwise_distances(self.data, metric=dist_func, force_all_finite=False)
+        distance_matrix = pairwise_distances(self.data.T, metric=dist_func, force_all_finite=False)
         clusterer = HDBSCAN(
             min_cluster_size=2,
             metric="precomputed",
