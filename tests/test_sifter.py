@@ -19,3 +19,9 @@ def test_sifter_run(synthetic_data_20):
     sifter = Sifter(n_jobs=1)
     siftered_data = sifter.run(data)
     assert siftered_data.shape[1] < data.shape[1], "The number of columns should be reduced."
+
+def test_sifter_run_upto_cpd(synthetic_data_20):
+    data = synthetic_data_20
+    sifter = Sifter(n_jobs=1)
+    siftered_data = sifter.run_upto_cpd(data)
+    assert siftered_data.shape[1] < data.shape[1], "The number of columns should be reduced."
