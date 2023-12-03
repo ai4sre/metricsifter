@@ -33,7 +33,7 @@ def reduce_by_method(
         case "None":
             remained_metrics = set(data.columns.tolist())
         case "Ideal":
-            remained_metrics = ground_truth["root_fault_nodes"] + ground_truth["fault_propagated_nodes"]
+            remained_metrics = set(ground_truth["root_fault_nodes"] + ground_truth["fault_propagated_nodes"])
         case "MetricSifter upto CPD":
             reducer = sifter.Sifter(
                 search_method="pelt", cost_model="l2", penalty="bic", penalty_adjust=2.5, n_jobs=1,
