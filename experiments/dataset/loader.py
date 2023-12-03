@@ -17,7 +17,20 @@ EMPIRICAL_TT_LARGE_DATA_FILE = DATA_DIR / "tt-large.tar.bz2"
 
 SYNTHETIC_PARAM_PATTERN = re.compile(r"anomaly_type-(?P<anomaly_type>\d+)_func_type-(?P<func_type>\w+)_noise_type-(?P<noise_type>\w+)_weight_generator-(?P<weight_generator>\w+)")
 
-def load_synthetic_data() -> dict:
+
+def _transform_dict_to_array(result: dict) -> list[tuple[dict, dict]]:
+    return [  # data_params + data
+        ({ "dataset_name": dataset_name,
+          "anomaly_type": anomaly_type,
+          "func_type": func_type, "noise_type": noise_type,
+          "weight_generator": weight_generator,
+          "trial_no": trial_no }
+        , data)
+        for (dataset_name, anomaly_type, func_type, noise_type, weight_generator, trial_no), data in result.items()
+    ]
+
+
+def load_synthetic_data() -> list[tuple[dict, dict]]:
     result: dict = defaultdict(lambda: dict())
     with tarfile.open(SYNTHETIC_DATA_FILE.as_posix(), "r:bz2") as tar:
         for tarinfo in tar:
@@ -55,4 +68,4 @@ def load_synthetic_data() -> dict:
                     result[params]["graph_adjacency"] = graph_adjacency
                 case _:
                     raise ValueError(f"Unknown file: {path.name}")
-    return result
+    return _transform_dict_to_array(result)
