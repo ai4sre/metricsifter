@@ -5,9 +5,12 @@ from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
+from joblib import Parallel, delayed
 
 DATA_DIR = (Path(__file__).parent.parent / "data").absolute().resolve()
+
 SYNTHETIC_DATA_FILE = DATA_DIR / "synthetic_data.tar.bz2"
+
 EMPIRICAL_SS_SMALL_DATA_FILE = DATA_DIR / "ss-small.tar.bz2"
 EMPIRICAL_SS_MEDIUM_DATA_FILE = DATA_DIR / "ss-medium.tar.bz2"
 EMPIRICAL_SS_LARGE_DATA_FILE = DATA_DIR / "ss-large.tar.bz2"
@@ -55,16 +58,16 @@ def load_synthetic_data() -> list[tuple[dict, dict]]:
                 raise ValueError(f"{path.name} is None")
             match path.name:
                 case "normal_data.csv":
-                    normal_data = pd.read_csv(f, index_col=0)
+                    normal_data = pd.read_csv(f)
                     result[params]["normal_data"] = normal_data
                 case "abnormal_data.csv":
-                    abnormal_data = pd.read_csv(f, index_col=0)
+                    abnormal_data = pd.read_csv(f)
                     result[params]["abnormal_data"] = abnormal_data
                 case "ground_truth.json":
                     ground_truth = json.load(f)
                     result[params]["ground_truth"] = ground_truth
                 case "graph_adjacency.csv":
-                    graph_adjacency = pd.read_csv(f, index_col=0)
+                    graph_adjacency = pd.read_csv(f)
                     result[params]["graph_adjacency"] = graph_adjacency
                 case _:
                     raise ValueError(f"Unknown file: {path.name}")
