@@ -33,11 +33,11 @@ def detect_univariate_changepoints(x: np.ndarray, search_method: str, cost_model
         warnings.simplefilter("ignore")
         match search_method:
             case "pelt":
-                searcher = rpt.KernelCPD(kernel="linear")  # written in C lang
+                searcher = rpt.KernelCPD(kernel="linear", min_size=2, jump=1)  # written in C lang
             case "binseg":
-                searcher = rpt.Binseg(model=cost_model)
+                searcher = rpt.Binseg(model=cost_model, jump=1)
             case "bottomup":
-                searcher = rpt.BottomUp(model=cost_model)
+                searcher = rpt.BottomUp(model=cost_model, jump=1)
             case _:
                 assert False, f"search_method={search_method} is not supported."
     sigma = np.std(x)

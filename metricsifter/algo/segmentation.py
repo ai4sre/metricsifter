@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import numpy as np
+import numpy.typing as npt
 import scipy.signal
 from statsmodels.nonparametric.kde import KDEUnivariate
 
@@ -12,7 +13,7 @@ def segment_nested_changepoints(
     cp_to_metrics: dict[int, list[str]],
     time_series_length: int,
     kde_bandwidth: float | str = 2.5,
-) -> tuple[dict[int, set[str]], dict[int, np.ndarray]]:
+) -> tuple[dict[int, set[str]], dict[int, npt.NDArray]]:
     _, label_to_change_points = segment_changepoints_with_kde(
         flatten_change_points,
         time_series_length=time_series_length,
@@ -35,7 +36,7 @@ def segment_changepoints_with_kde(
     time_series_length: int,
     kde_bandwidth: str | float,
     unique_values: bool = True,
-) -> tuple[np.ndarray, dict[int, np.ndarray]]:
+) -> tuple[np.ndarray, dict[int, npt.NDArray]]:
     assert len(change_points) > 0, "change_points should not be empty"
 
     x = np.array(change_points, dtype=int)
