@@ -64,52 +64,53 @@ def sweep_reduction_on_synthetic(dataset: list[tuple[dict, dict]], n_jobs: int =
 
 def _run_reduction_on_empirical(method: str, data_param: dict, data_body: dict) -> dict:
     data: pd.DataFrame = data_body["data"]
-    data_spec: dict[str, str | int] = data_body["data_spec"]
 
     pk: PriorKnowledge
-    match data_spec["dataset_name"].split("-"):
-        case ["SS", "small"]:
+    match data_param["dataset_name"].split("-"):
+        case ["ss", "small"]:
             pk = SockShopKnowledge(
                 target_metric_types=MEDIUM_TARGET_METRIC_TYPES
             )
-        case ["SS", "medium"]:
+        case ["ss", "medium"]:
             pk = SockShopKnowledge(
                 target_metric_types=MEDIUM_TARGET_METRIC_TYPES
             )
-        case ["SS", "large"]:
+        case ["ss", "large"]:
             pk = SockShopKnowledge(
                 target_metric_types=LARGE_TARGET_METRIC_TYPES
             )
-        case ["TT", "small"]:
+        case ["tt", "small"]:
             pk = TrainTicketKnowledge(
                 target_metric_types=MEDIUM_TARGET_METRIC_TYPES
             )
-        case ["TT", "medium"]:
+        case ["tt", "medium"]:
             pk = TrainTicketKnowledge(
                 target_metric_types=MEDIUM_TARGET_METRIC_TYPES
             )
-        case ["TT", "large"]:
+        case ["tt", "large"]:
             pk = TrainTicketKnowledge(
                 target_metric_types=LARGE_TARGET_METRIC_TYPES
             )
         case _:
-            raise ValueError(f"Unknown dataset: {data_spec['dataset_name']}")
+            raise ValueError(f"Unknown dataset: {data_param['dataset_name']}")
 
     selected_root_fault_metrics = select_root_fault_metrics(
         pk=pk,
         metrics=set(data.columns.tolist()),
-        fault_type=data_spec["fault_type"],
-        fault_comp=data_spec["fault_comp"],
+        fault_type=data_param["fault_type"],
+        fault_comp=data_param["fault_comp"],
     )
 
     time_start: float = time.perf_counter()
 
     remained_metrics = reduce_by_method(
-        method, data,
-        {
+        method=method,
+        data=data,
+        ground_truth={
             "root_fault_nodes": selected_root_fault_metrics,
             "fault_propagated_nodes": [],  # not available labels in empirical datasets
         },
+        enable_preprocessing=True,
     )
 
     time_reduction: float = time.perf_counter() - time_start
