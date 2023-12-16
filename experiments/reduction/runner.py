@@ -1,7 +1,11 @@
-from typing import Final
+from typing import Final, Literal
 
 import pandas as pd
+from joblib import Parallel, delayed
 from metricsifter import sifter
+
+from dataset.separater import separate_data_by_component
+from priorknowledge.base import PriorKnowledge
 
 from .algo.birch import Birch
 from .algo.fluxinfer_ad import FluxInferAD
@@ -14,6 +18,16 @@ REDUCTION_METHODS: Final[list[str]] = [
     "None",
     "Ideal",
     "MetricSifter upto CPD",
+    "MetricSifter",
+    "NSigma",
+    "Birch",
+    "K-S test",
+    "FluxInfer-AD",
+    "HDBS-SBD",
+    "HDBS-R",
+]
+EMPIRICAL_REDUCTION_METHODS: Final[list[str]] = [
+    "None",
     "MetricSifter",
     "NSigma",
     "Birch",
@@ -43,7 +57,7 @@ def reduce_by_method(
         case "MetricSifter":
             reducer = sifter.Sifter(
                 search_method="pelt", cost_model="l2", penalty="bic",
-                penalty_adjust=2.5, bandwidth=2.5,
+                penalty_adjust=2.5, bandwidth=3.5,
                 segment_selection_method="weighted_max",
                 n_jobs=1,
             )
@@ -77,3 +91,19 @@ def reduce_by_method(
             raise ValueError(f"Unknown reduction method: {method}")
 
     return remained_metrics
+
+
+def run_by_component_for_empirical(
+    data: pd.DataFrame,
+    ground_truth: dict,
+    pk: PriorKnowledge,
+    method: Literal["HDBS-R", "HDBS-SBD"],
+    granularity: Literal["service", "container"] = "service",
+    n_jobs: int = 1,
+) -> set[str]:
+    """ Run reduction methods by component unit for empirical data """
+
+    comp_to_metrics_df = separate_data_by_component(data, pk, granularity=granularity)
+    ret = Parallel(n_jobs=n_jobs)(delayed(reduce_by_method)(method, _data, ground_truth) for _data in comp_to_metrics_df.values())
+    assert ret is not None, "Parallel execution failed"
+    return set.union(*ret)
