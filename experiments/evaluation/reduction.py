@@ -36,6 +36,7 @@ def scores_of_empirical(
     root_fault_recall = len(pred_anomalous_metrics & true_root_fault_metrics) / len(true_root_fault_metrics)
     specificity = len(pred_normal_metrics & true_normal_metrics) / len(true_normal_metrics) if len(true_normal_metrics) > 0 else 0.0
     bacc = (root_fault_recall + specificity) / 2
+    proportion_of_root_fault = len(pred_anomalous_metrics & true_root_fault_metrics) / len(pred_anomalous_metrics) if len(pred_anomalous_metrics) > 0 else 0.0
 
     return {
         "num_remained": len(pred_anomalous_metrics),
@@ -43,6 +44,7 @@ def scores_of_empirical(
         "num_total": len(total_metrics),
         "reduction_rate": len(pred_normal_metrics) / len(total_metrics),
         "root_fault_recall": root_fault_recall,
+        "root_fault_proportion": proportion_of_root_fault,
         "root_fault_specificity": specificity,
         "root_fault_ba": bacc,
     }
