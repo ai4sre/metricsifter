@@ -7,5 +7,6 @@ hdbscan
 networkx
 joblib
 threadpoolctl
+notebook
 sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b
 metricsifter @ git+https://github.com/ai4sre/metricsifter@main
