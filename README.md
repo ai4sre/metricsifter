@@ -31,7 +31,10 @@ assert set(sifted_data.columns) - anomalous_nodes == set()
 
 The example of original synthetic data and its sifted data is shown in the following figure.
 
+### Before
 <img src="./docs/images/original_time_series.png" width="600" height="480">
+
+### After
 <img src="./docs/images/sifted_time_series.png" width="600" height="360">
 
 
