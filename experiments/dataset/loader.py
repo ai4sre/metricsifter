@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 from joblib import Parallel, delayed
 
+from dataset.metric import parse_metric, MetricType
+
 DATA_DIR = (Path(__file__).parent.parent / "data").absolute().resolve()
 
 SYNTHETIC_DATA_FILE = DATA_DIR / "synthetic_data.tar.bz2"
@@ -78,6 +80,10 @@ def load_synthetic_data() -> list[tuple[dict, dict]]:
     return _transform_dict_to_array(result)
 
 
+def _filter_unnecessary_metrics(data: pd.DataFrame) -> pd.DataFrame:
+    return data.loc[:, [parse_metric(metric_name)[2] != MetricType.UNEXPECTED for metric_name in data.columns]]
+
+
 def _load_empirical_tar_file(tarinfo: tarfile.TarInfo, tar_bytes: bytes) -> tuple[tuple[str, str, str, int], dict]:
     dataset_name, fault_type, fault_comp = tarinfo.name.split("/")[0:3]
     path = Path(tarinfo.name)
@@ -91,8 +97,8 @@ def _load_empirical_tar_file(tarinfo: tarfile.TarInfo, tar_bytes: bytes) -> tupl
         params = (dataset_name, fault_type, fault_comp, trial_no)
         match path.name:
             case "metrics.csv":
-                data = pd.read_csv(f, index_col=0)
-                return params, { "data": data }
+                data = pd.read_csv(f)
+                return params, { "data": _filter_unnecessary_metrics(data) }
             case "data_spec.json":
                 data_spec = json.load(f)
                 return params, { "data_spec": data_spec }

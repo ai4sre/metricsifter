@@ -15,4 +15,4 @@ class KSTest(NormalityReducer):
         else:
             train_x, test_x = np.split(x, [kstest_anomalous_start_idx])
         pval = scipy.stats.ks_2samp(train_x, test_x).pvalue
-        return pval < kstest_alpha
+        return pval <= kstest_alpha

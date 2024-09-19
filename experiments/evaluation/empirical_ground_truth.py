@@ -61,6 +61,8 @@ def select_root_fault_metrics(
         if comp in pk.get_skip_containers() or comp in pk.get_skip_services():
             continue
         match metric_type:
+            case MetricType.UNEXPECTED:
+                pass
             case MetricType.CONTAINER:
                 role, _ = pk.get_role_and_runtime_by_container(comp)
                 for _role in ["*", role]:

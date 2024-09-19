@@ -41,11 +41,7 @@ def reduce_by_method(
     method: str,
     data: pd.DataFrame,
     ground_truth: dict,
-    enable_preprocessing: bool = False,
 ) -> set[str]:
-    if enable_preprocessing:
-        data = sifter.Sifter._filter_no_changes(data, n_jobs=1)
-
     remained_metrics: set
     match method:
         case "None":

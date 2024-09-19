@@ -24,6 +24,7 @@ ALL_METRIC_TYPES: Final[dict[str, bool]] = {
 
 @unique
 class MetricType(IntEnum):
+    UNEXPECTED = auto()
     CONTAINER = auto()
     SERVICE = auto()
     NODE = auto()
@@ -36,7 +37,6 @@ def parse_metric(metric: str) -> tuple[str, str, MetricType]:
         >>> parse_metric("c-user_cpu_usage_seconds_total")
         ("cpu_usage", "seconds_total")
     """
-    comp, base_name = metric.split("-", maxsplit=1)[1].split("_", maxsplit=1)
     if metric.startswith("c-"):
         comp_type = MetricType.CONTAINER
     elif metric.startswith("s-"):
@@ -46,7 +46,10 @@ def parse_metric(metric: str) -> tuple[str, str, MetricType]:
     elif metric.startswith("m-"):
         comp_type = MetricType.MIDDLEWARE
     else:
-        raise ValueError(f"no prefix: {metric}")
+        comp_type = MetricType.UNEXPECTED
+        return "", "", comp_type
+
+    comp, base_name = metric.split("-", maxsplit=1)[1].split("_", maxsplit=1)
     return comp, base_name, comp_type
 
 

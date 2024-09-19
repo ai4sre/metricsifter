@@ -3,6 +3,7 @@ from itertools import product
 
 import pandas as pd
 from joblib import Parallel, delayed
+from metricsifter import sifter
 
 from evaluation.empirical_ground_truth import select_root_fault_metrics
 from evaluation.reduction import scores_of_empirical, scores_of_synthetic
@@ -101,6 +102,9 @@ def _run_reduction_on_empirical(method: str, data_param: dict, data_body: dict) 
         fault_comp=data_param["fault_comp"],
     )
 
+    data = sifter.Sifter._filter_no_changes(data, n_jobs=1)
+
+    # NOTE: We do not include the time for simple filtering
     time_start: float = time.perf_counter()
 
     remained_metrics = reduce_by_method(
@@ -110,10 +114,10 @@ def _run_reduction_on_empirical(method: str, data_param: dict, data_body: dict) 
             "root_fault_nodes": selected_root_fault_metrics,
             "fault_propagated_nodes": [],  # not available labels in empirical datasets
         },
-        enable_preprocessing=True,
     )
 
     time_reduction: float = time.perf_counter() - time_start
+
     scores = scores_of_empirical(
         pred_anomalous_metrics=remained_metrics,
         true_root_fault_metrics=set(selected_root_fault_metrics),
