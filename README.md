@@ -11,7 +11,43 @@ MetricSifter is a feature reduction framework designed to accurately identify an
 
 ## Installation
 
-You can install `metricsifter` package from PyPI via `pip install metricsifter`.
+### Prerequisites
+
+If you want to use `uv` (recommended for faster installation), install it first:
+
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or using pip
+pip install uv
+```
+
+### From PyPI
+
+You can install `metricsifter` package from PyPI:
+
+```bash
+# Using pip
+pip install metricsifter
+
+# Using uv (recommended for faster installation)
+uv pip install metricsifter
+```
+
+### For Development
+
+```bash
+# Clone the repository
+git clone https://github.com/ai4sre/metricsifter.git
+cd metricsifter
+
+# Using uv (recommended)
+uv sync --all-extras
+
+# Or using pip
+pip install -e ".[dev]"
+```
 
 ## Getting Started
 
@@ -40,15 +76,32 @@ The example of original synthetic data and its sifted data is shown in the follo
 <img src="./docs/images/sifted_time_series.png" width="600" height="360">
 
 
-## For developers
+## For Developers
 
-Run test cases with the following commands.
+### Setup Development Environment
 
-```shell
-# Install dependencies for development
-python -m pip install -r requirements-dev.txt
-# Run test cases
+```bash
+# Using uv (recommended)
+uv sync --all-extras
+
+# Or using pip
+pip install -e ".[dev]"
+```
+
+### Run Tests
+
+```bash
 pytest -s -v tests
+```
+
+### Code Quality
+
+```bash
+# Format code
+black .
+
+# Lint code
+ruff check .
 ```
 
 ## License

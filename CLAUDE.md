@@ -4,11 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
+### Setup Development Environment
+```bash
+# Using uv (recommended for faster installation)
+uv sync --all-extras
+
+# Or using pip
+pip install -e ".[dev]"
+```
+
 ### Testing
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
 # Run all tests
 pytest -s -v tests
 
@@ -30,16 +36,25 @@ mypy metricsifter/
 
 ### Package Installation
 ```bash
-# Install package in development mode
+# Install package in development mode (using uv)
+uv pip install -e .
+
+# Install package in development mode (using pip)
 pip install -e .
 
-# Install from PyPI
+# Install from PyPI (using uv)
+uv pip install metricsifter
+
+# Install from PyPI (using pip)
 pip install metricsifter
 ```
 
 ### Running Experiments
 ```bash
-# Setup experiment environment
+# Setup experiment environment with uv
+uv sync --extra experiments
+
+# Or using pip
 cd experiments/
 pip install -r requirements.txt
 
