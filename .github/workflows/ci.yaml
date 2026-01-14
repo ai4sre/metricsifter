@@ -3,41 +3,46 @@ name: CI
 on: [push]
 
 jobs:
-  pytest:
-    name: Run tests with pytest
+  test:
+    name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install c libraries
         run: |
+          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libc6-dev \
             gcc
 
-      - uses: syphar/restore-virtualenv@v1
-        id: cache-virtualenv
-        with:
-          requirement_files: |
-            requirements.txt
-            requirements-dev.txt
+      - name: Install dependencies (Python 3.10-3.11)
+        if: matrix.python-version == '3.10' || matrix.python-version == '3.11'
+        run: uv sync --all-extras --python ${{ matrix.python-version }}
 
-      - uses: syphar/restore-pip-download-cache@v1
-        if: steps.cache-virtualenv.outputs.cache-hit != 'true'
+      - name: Install core package only (Python 3.12+)
+        if: matrix.python-version != '3.10' && matrix.python-version != '3.11'
+        run: uv sync --python ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-        if: steps.cache-virtualenv.outputs.cache-hit != 'true'
+      - name: Test with pytest (Python 3.10-3.11)
+        if: matrix.python-version == '3.10' || matrix.python-version == '3.11'
+        run: uv run pytest -s -vv tests
 
-      - name: Test with pytest
-        run: pytest -s -vv tests
+      - name: Verify core package installation (Python 3.12+)
+        if: matrix.python-version != '3.10' && matrix.python-version != '3.11'
+        run: |
+          uv run python -c "import metricsifter; print(f'metricsifter imported successfully')"
+          uv run python -c "from metricsifter.sifter import Sifter; print(f'Sifter class imported successfully')"

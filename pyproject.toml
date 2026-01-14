@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metricsifter"
+version = "0.0.1"
+description = "Feature Reduction for Multivariate Time Series Data"
+readme = "README.md"
+authors = [{name = "yuuki"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "joblib",
+    "ruptures",
+    "statsmodels",
+    "networkx",
+]
+
+[project.urls]
+Homepage = "https://github.com/ai4sre/metricsifter"
+"Bug Tracker" = "https://github.com/ai4sre/metricsifter/issues"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "ruff",
+    "coverage",
+    "pytest",
+    "setuptools",
+    "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b",
+]
+experiments = [
+    "pandas-stubs",
+    "scikit-learn>=0.24,<1.2",
+    "hdbscan",
+    "threadpoolctl",
+    "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b",
+]
+
+[tool.setuptools.packages.find]
+include = ["metricsifter*"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310", "py311", "py312", "py313"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
