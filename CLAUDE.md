@@ -2,14 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Python Version Support
+
+- **Core Package**: Python 3.10, 3.11, 3.12, 3.13, 3.14
+- **Development/Testing**: Python 3.10, 3.11 only (due to sfr-pyrca dependency constraints)
+- **Experiments**: Python 3.10, 3.11 only (requires sfr-pyrca)
+
 ## Development Commands
 
 ### Setup Development Environment
+**Note**: Use Python 3.10 or 3.11 for development (uv automatically selects 3.11).
+
 ```bash
 # Using uv (recommended for faster installation)
 uv sync --all-extras
 
-# Or using pip
+# Or using pip with Python 3.10 or 3.11
 pip install -e ".[dev]"
 ```
 

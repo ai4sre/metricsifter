@@ -37,15 +37,17 @@ uv pip install metricsifter
 
 ### For Development
 
+**Note**: Development environment requires Python 3.10 or 3.11 due to experimental dependencies (sfr-pyrca). However, the core package supports Python 3.10-3.14.
+
 ```bash
 # Clone the repository
 git clone https://github.com/ai4sre/metricsifter.git
 cd metricsifter
 
-# Using uv (recommended)
+# Using uv (recommended) - automatically selects Python 3.11
 uv sync --all-extras
 
-# Or using pip
+# Or using pip with Python 3.10 or 3.11
 pip install -e ".[dev]"
 ```
 

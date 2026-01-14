@@ -9,10 +9,13 @@ description = "Feature Reduction for Multivariate Time Series Data"
 readme = "README.md"
 authors = [{name = "yuuki"}]
 license = {text = "MIT"}
-requires-python = ">=3.10,<3.12"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -40,7 +43,7 @@ dev = [
 ]
 experiments = [
     "pandas-stubs",
-    "scikit-learn",
+    "scikit-learn>=0.24,<1.2",
     "hdbscan",
     "threadpoolctl",
     "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b",
@@ -51,7 +54,7 @@ include = ["metricsifter*"]
 
 [tool.black]
 line-length = 120
-target-version = ["py310", "py311"]
+target-version = ["py310", "py311", "py312", "py313"]
 
 [tool.ruff]
 line-length = 120
