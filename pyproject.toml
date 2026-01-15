@@ -39,14 +39,12 @@ dev = [
     "coverage",
     "pytest",
     "setuptools",
-    "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b",
 ]
 experiments = [
     "pandas-stubs",
     "scikit-learn>=0.24,<1.2",
     "hdbscan",
     "threadpoolctl",
-    "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b",
 ]
 
 [tool.setuptools.packages.find]

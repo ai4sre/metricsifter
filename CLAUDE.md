@@ -5,20 +5,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Python Version Support
 
 - **Core Package**: Python 3.10, 3.11, 3.12, 3.13, 3.14
-- **Development/Testing**: Python 3.10, 3.11 only (due to sfr-pyrca dependency constraints)
+- **Development/Testing**: Python 3.10-3.14 (core functionality)
 - **Experiments**: Python 3.10, 3.11 only (requires sfr-pyrca)
 
 ## Development Commands
 
 ### Setup Development Environment
-**Note**: Use Python 3.10 or 3.11 for development (uv automatically selects 3.11).
+**Note**: The core package supports Python 3.10-3.14. For experiments, use Python 3.10 or 3.11.
 
 ```bash
 # Using uv (recommended for faster installation)
 uv sync --all-extras
 
-# Or using pip with Python 3.10 or 3.11
+# Or using pip
 pip install -e ".[dev]"
+
+# For experiments (Python 3.10 or 3.11 only)
+# Install sfr-pyrca separately as it's not available on PyPI
+pip install git+https://github.com/salesforce/PyRCA@d85512b
 ```
 
 ### Testing
@@ -62,9 +66,13 @@ pip install metricsifter
 # Setup experiment environment with uv
 uv sync --extra experiments
 
+# Install sfr-pyrca separately (Python 3.10 or 3.11 only)
+pip install git+https://github.com/salesforce/PyRCA@d85512b
+
 # Or using pip
 cd experiments/
 pip install -r requirements.txt
+pip install git+https://github.com/salesforce/PyRCA@d85512b
 
 # Download datasets from GitHub releases
 gh release download data-v1.0.0 -D data/ --pattern "*.tar.bz2"

@@ -37,18 +37,27 @@ uv pip install metricsifter
 
 ### For Development
 
-**Note**: Development environment requires Python 3.10 or 3.11 due to experimental dependencies (sfr-pyrca). However, the core package supports Python 3.10-3.14.
+**Note**: The core package supports Python 3.10-3.14.
 
 ```bash
 # Clone the repository
 git clone https://github.com/ai4sre/metricsifter.git
 cd metricsifter
 
-# Using uv (recommended) - automatically selects Python 3.11
+# Using uv (recommended)
 uv sync --all-extras
 
-# Or using pip with Python 3.10 or 3.11
+# Or using pip
 pip install -e ".[dev]"
+```
+
+**For running experiments** (requires Python 3.10 or 3.11):
+
+The experiments require `sfr-pyrca`, which must be installed separately as it's not available on PyPI:
+
+```bash
+# Install sfr-pyrca from GitHub (Python 3.10 or 3.11 only)
+pip install git+https://github.com/salesforce/PyRCA@d85512b
 ```
 
 ## Getting Started
@@ -88,6 +97,9 @@ uv sync --all-extras
 
 # Or using pip
 pip install -e ".[dev]"
+
+# For experiments (Python 3.10 or 3.11 only)
+pip install git+https://github.com/salesforce/PyRCA@d85512b
 ```
 
 ### Run Tests
