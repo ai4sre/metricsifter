@@ -106,6 +106,77 @@ black .
 ruff check .
 ```
 
+### Publishing to PyPI
+
+This package uses GitHub Actions to automatically publish to PyPI when a new tag is pushed.
+
+#### Publishing Process
+
+1. **Update version in pyproject.toml**
+   ```bash
+   # Edit the version field
+   version = "0.0.2"  # Increment as needed
+   ```
+
+2. **Commit and tag the release**
+   ```bash
+   git add pyproject.toml
+   git commit -m "Bump version to 0.0.2"
+   git tag v0.0.2
+   git push origin main
+   git push origin v0.0.2
+   ```
+
+3. **Automatic Publication**
+   - The GitHub Actions workflow will automatically:
+     - Build the package using `uv build`
+     - Publish to TestPyPI (for testing)
+     - Publish to PyPI (production)
+
+#### Setup Requirements
+
+For the workflow to work, you need to configure Trusted Publishing in PyPI:
+
+1. Go to [PyPI](https://pypi.org/) and [TestPyPI](https://test.pypi.org/)
+2. Create/login to your account
+3. Go to your account settings → Publishing
+4. Add a new Trusted Publisher with:
+   - **PyPI project name**: `metricsifter`
+   - **Owner**: `ai4sre`
+   - **Repository name**: `metricsifter`
+   - **Workflow name**: `publish.yaml`
+   - **Environment name**: `pypi` (for PyPI) or `testpypi` (for TestPyPI)
+
+Note: Trusted Publishing uses OpenID Connect (OIDC) and doesn't require manual API tokens.
+
+#### Local Build Testing
+
+To test the build locally before publishing:
+
+```bash
+# Build the package
+uv build
+
+# The built files will be in the dist/ directory:
+# - metricsifter-X.Y.Z.tar.gz (source distribution)
+# - metricsifter-X.Y.Z-py3-none-any.whl (wheel)
+```
+
+#### Manual Publishing (Alternative)
+
+If you prefer to publish manually:
+
+```bash
+# Build the package
+uv build
+
+# Publish to TestPyPI (for testing)
+uv publish --publish-url https://test.pypi.org/legacy/
+
+# Publish to PyPI (production)
+uv publish
+```
+
 ## License
 
 [BSD-3-Clause](LICENSE)

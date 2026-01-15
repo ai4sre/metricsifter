@@ -1,7 +1,0 @@
-numpy
-pandas
-scipy
-joblib
-ruptures
-statsmodels
-networkx
