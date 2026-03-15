@@ -42,7 +42,7 @@ dev = [
 ]
 experiments = [
     "pandas-stubs",
-    "scikit-learn>=0.24,<1.2",
+    "scikit-learn>=1.5",
     "hdbscan",
     "threadpoolctl",
 ]
