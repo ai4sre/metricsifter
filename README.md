@@ -87,6 +87,10 @@ The example of original synthetic data and its sifted data is shown in the follo
 <img src="./docs/images/sifted_time_series.png" width="600" height="360">
 
 
+## Agent Integration
+
+[agent-metricsifter](https://github.com/ai4sre/agent-metricsifter) provides Claude Code Agent Skills that combine MetricSifter with [mcp-grafana](https://github.com/grafana/mcp-grafana) for interactive incident investigation. It enables automated Prometheus metrics filtering, Grafana dashboard creation, and human-in-the-loop parameter calibration.
+
 ## For Developers
 
 ### Setup Development Environment
