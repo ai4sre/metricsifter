@@ -45,10 +45,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs (default: 1).")
     run.add_argument(
         "--index-col",
-        default="0",
-        help="Column to use as the row index (int position or name; default: 0). Pass 'none' to disable.",
+        default="none",
+        help="Column to use as the row index (int position or name). By default every column is "
+        "treated as a metric; pass e.g. '--index-col 0' when the CSV has a time/index column.",
     )
-    run.add_argument("--parse-dates", action="store_true", help="Parse the index column as datetimes.")
+    run.add_argument(
+        "--parse-dates", action="store_true", help="Parse the index column (see --index-col) as datetimes."
+    )
     return parser
 
 

@@ -39,10 +39,22 @@ def _require_matplotlib():
 
 
 def _change_point_positions(result: SiftResult) -> list[int]:
-    """Flatten every per-metric change point into a sorted position list."""
+    """Flatten every per-metric change point into a sorted, deduplicated position list."""
     positions: set[int] = set()
     for cps in result.metric_to_change_points.values():
         positions.update(int(cp) for cp in cps)
+    return sorted(positions)
+
+
+def _flatten_change_points(result: SiftResult) -> list[int]:
+    """Flatten per-metric change points keeping multiplicity.
+
+    Segmentation weighs a position once per metric that changes there, so the
+    KDE overlay must keep duplicates to match the internally used density.
+    """
+    positions: list[int] = []
+    for cps in result.metric_to_change_points.values():
+        positions.extend(int(cp) for cp in cps)
     return sorted(positions)
 
 
@@ -150,7 +162,7 @@ def plot_change_point_density(
     ax.set_yticks([])
 
     # Overlay the internal KDE density curve when it is well-defined.
-    density = segmentation.compute_kde_density(positions, time_series_length, kde_bandwidth)
+    density = segmentation.compute_kde_density(_flatten_change_points(result), time_series_length, kde_bandwidth)
     if density is not None:
         s, e = density
         ax_density = ax.twinx()

@@ -208,6 +208,8 @@ metricsifter run input.csv --output sifted.csv --report report.json \
     --penalty-adjust 2.0 --bandwidth 2.5 --search-method pelt --n-jobs 1
 
 # With no --output, the sifted CSV is written to stdout.
+# By default every column is treated as a metric; pass --index-col when the
+# CSV has a time/index column.
 metricsifter run input.csv --index-col 0 --parse-dates
 ```
 
