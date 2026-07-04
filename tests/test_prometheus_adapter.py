@@ -94,6 +94,16 @@ class TestEdgeCases:
         with pytest.raises(ValueError, match="matrix"):
             prometheus.from_query_range(response)
 
+    def test_error_response_raises_value_error(self):
+        response = {"status": "error", "errorType": "bad_data", "error": "invalid query"}
+        with pytest.raises(ValueError, match="bad_data"):
+            prometheus.from_query_range(response)
+
+    def test_missing_result_type_raises_value_error(self):
+        # A response without data.resultType is malformed, not "zero series".
+        with pytest.raises(ValueError, match="matrix"):
+            prometheus.from_query_range({"data": {"result": []}})
+
     def test_empty_result(self):
         df = prometheus.from_query_range({"data": {"resultType": "matrix", "result": []}})
         assert df.empty

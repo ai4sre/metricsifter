@@ -55,11 +55,16 @@ def from_query_range(response: dict, *, label_sep: str = ",") -> pd.DataFrame:
         ``df.attrs["metric_labels"]``; use :func:`to_metric_labels` to read it.
 
     Raises:
-        ValueError: If the response is not a matrix result.
+        ValueError: If the response is an error response or not a matrix result.
     """
+    status = response.get("status")
+    if status is not None and status != "success":
+        error = response.get("error", "")
+        error_type = response.get("errorType", "")
+        raise ValueError(f"Prometheus returned status={status!r} (errorType={error_type!r}, error={error!r}).")
     data = response.get("data", {})
     result_type = data.get("resultType")
-    if result_type is not None and result_type != "matrix":
+    if result_type != "matrix":
         raise ValueError(f"from_query_range expects a matrix result (query_range), got resultType={result_type!r}.")
     result = data.get("result", [])
 
