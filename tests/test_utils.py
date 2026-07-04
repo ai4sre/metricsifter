@@ -86,62 +86,77 @@ class TestParallelApply:
 
     def test_basic_apply(self):
         """Basic apply operation"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3, 4, 5],
-            'B': [2, 4, 6, 8, 10],
-            'C': [1, 1, 1, 1, 1]
-        })
+        df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": [2, 4, 6, 8, 10], "C": [1, 1, 1, 1, 1]})
 
         # Get maximum value of each column
         result = parallel_apply(df, lambda x: x.max(), n_jobs=1)
 
-        expected = pd.Series({'A': 5, 'B': 10, 'C': 1})
+        expected = pd.Series({"A": 5, "B": 10, "C": 1})
         pd.testing.assert_series_equal(result, expected)
 
-    @pytest.mark.skip(reason="Parallel execution may cause permission errors depending on environment")
     def test_parallel_execution(self):
         """Test parallel execution"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3, 4, 5],
-            'B': [2, 4, 6, 8, 10],
-            'C': [3, 6, 9, 12, 15]
-        })
+        df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": [2, 4, 6, 8, 10], "C": [3, 6, 9, 12, 15]})
 
         # Get average of each column with parallel execution
         result = parallel_apply(df, lambda x: x.mean(), n_jobs=2)
 
         # Verify results are correct
-        expected = pd.Series({'A': 3.0, 'B': 6.0, 'C': 9.0})
+        expected = pd.Series({"A": 3.0, "B": 6.0, "C": 9.0})
         pd.testing.assert_series_equal(result, expected)
 
-    @pytest.mark.skip(reason="Parallel execution may cause permission errors depending on environment")
     def test_single_job_vs_parallel(self):
-        """Results should match between single job and parallel execution"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3, 4, 5],
-            'B': [2, 4, 6, 8, 10]
-        })
+        """Results should match between single job and parallel execution (n_jobs 1, 2, -1)"""
+        # More columns than jobs so the column split is actually exercised
+        df = pd.DataFrame(
+            {
+                "A": [1, 2, 3, 4, 5],
+                "B": [2, 4, 6, 8, 10],
+                "C": [3, 6, 9, 12, 15],
+                "D": [4, 8, 12, 16, 20],
+                "E": [5, 10, 15, 20, 25],
+            }
+        )
 
-        func = lambda x: x.sum()
+        def func(x):
+            return x.sum()
 
         result_single = parallel_apply(df, func, n_jobs=1)
         result_parallel = parallel_apply(df, func, n_jobs=2)
+        result_all = parallel_apply(df, func, n_jobs=-1)
 
         pd.testing.assert_series_equal(result_single, result_parallel)
+        pd.testing.assert_series_equal(result_single, result_all)
+
+    def test_dataframe_returning_func_matches_serial(self):
+        """Element-wise funcs (column -> same-length Series) must match df.apply()"""
+        df = pd.DataFrame(
+            {
+                "A": [1, 2, 3, 4, 5],
+                "B": [2, 4, 6, 8, 10],
+                "C": [3, 6, 9, 12, 15],
+                "D": [4, 8, 12, 16, 20],
+                "E": [5, 10, 15, 20, 25],
+            }
+        )
+
+        def func(x):
+            return x * 2
+
+        expected = df.apply(func)
+        pd.testing.assert_frame_equal(parallel_apply(df, func, n_jobs=2), expected)
+        pd.testing.assert_frame_equal(parallel_apply(df, func, n_jobs=-1), expected)
 
     def test_with_custom_function(self):
         """Should work with custom function"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3],
-            'B': [4, 5, 6]
-        })
+        df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
 
         def custom_func(x):
             return x.max() - x.min()
 
         result = parallel_apply(df, custom_func, n_jobs=1)
 
-        expected = pd.Series({'A': 2, 'B': 2})
+        expected = pd.Series({"A": 2, "B": 2})
         pd.testing.assert_series_equal(result, expected)
 
     def test_empty_dataframe(self):
@@ -154,38 +169,30 @@ class TestParallelApply:
         assert isinstance(result, pd.Series)
         assert len(result) == 0
 
-    @pytest.mark.skip(reason="Parallel execution may cause permission errors depending on environment")
     def test_single_column(self):
         """Should handle single column DataFrame"""
-        df = pd.DataFrame({'A': [1, 2, 3, 4, 5]})
+        df = pd.DataFrame({"A": [1, 2, 3, 4, 5]})
 
         result = parallel_apply(df, lambda x: x.sum(), n_jobs=2)
 
-        expected = pd.Series({'A': 15})
+        expected = pd.Series({"A": 15})
         pd.testing.assert_series_equal(result, expected)
 
     def test_with_kwargs(self):
         """Should work with additional keyword arguments"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3],
-            'B': [4, 5, 6]
-        })
+        df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
 
         # Apply column-wise by specifying axis=0 (though this case applies to columns)
         result = parallel_apply(df, lambda x: x.max(), n_jobs=1, axis=0)
 
-        expected = pd.Series({'A': 3, 'B': 6})
+        expected = pd.Series({"A": 3, "B": 6})
         pd.testing.assert_series_equal(result, expected)
 
-    @pytest.mark.skip(reason="Parallel execution may cause permission errors depending on environment")
     def test_n_jobs_negative(self):
         """Specifying -1 should use all CPUs"""
-        df = pd.DataFrame({
-            'A': [1, 2, 3],
-            'B': [4, 5, 6]
-        })
+        df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})
 
         result = parallel_apply(df, lambda x: x.sum(), n_jobs=-1)
 
-        expected = pd.Series({'A': 6, 'B': 15})
+        expected = pd.Series({"A": 6, "B": 15})
         pd.testing.assert_series_equal(result, expected)
