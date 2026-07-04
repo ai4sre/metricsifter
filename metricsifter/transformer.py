@@ -32,8 +32,8 @@ _PARAM_NAMES = (
     "bandwidth",
     "segment_selection_method",
     "n_jobs",
-    "sigma_estimator",
     "without_simple_filter",
+    "sigma_estimator",
 )
 
 
@@ -58,8 +58,8 @@ class SifterTransformer:
         bandwidth: float | str = 2.5,
         segment_selection_method: str | Callable[[SegmentCandidate], float] = "weighted_max",
         n_jobs: int = 1,
-        sigma_estimator: str = "std",
         without_simple_filter: bool = False,
+        sigma_estimator: str = "std",
     ) -> None:
         # Store every argument verbatim under its own name (sklearn convention;
         # required for get_params/clone round-trips to be exact).
@@ -70,8 +70,8 @@ class SifterTransformer:
         self.bandwidth = bandwidth
         self.segment_selection_method = segment_selection_method
         self.n_jobs = n_jobs
-        self.sigma_estimator = sigma_estimator
         self.without_simple_filter = without_simple_filter
+        self.sigma_estimator = sigma_estimator
 
     # -- scikit-learn estimator protocol ---------------------------------
 

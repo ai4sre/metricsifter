@@ -181,8 +181,8 @@ def detect_multi_changepoints(
     cost_model: str,
     penalty: str | float,
     penalty_adjust: float,
-    sigma_estimator: str = "std",
     n_jobs: int = -1,
+    sigma_estimator: str = "std",
 ) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]]]:
     metrics: list[str] = X.columns.tolist()
     multi_change_points = Parallel(n_jobs=n_jobs)(
