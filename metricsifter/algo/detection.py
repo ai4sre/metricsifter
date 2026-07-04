@@ -14,6 +14,18 @@ NO_CHANGE_POINTS: Final[int] = -1
 #: Noise-scale (``sigma``) estimators supported by :func:`detect_univariate_changepoints`.
 SIGMA_ESTIMATORS: Final[frozenset[str]] = frozenset({"std", "mad", "diff_std"})
 
+#: Candidate ``penalty_adjust`` multipliers swept by the ``"auto"`` plateau search.
+#: A geometric grid (step ``2**(1/3)``) so that relative penalty changes are uniform;
+#: the power-of-two anchors make 0.5, 1.0, 2.0 (the default), 4.0 and 8.0 exact.
+PENALTY_ADJUST_GRID: Final[tuple[float, ...]] = tuple(0.5 * 2 ** (k / 3) for k in range(13))
+
+#: Minimum tolerant-Jaccard similarity between adjacent grid points for them to
+#: belong to the same plateau.
+PLATEAU_JACCARD_THRESHOLD: Final[float] = 0.90
+
+#: ``penalty_adjust`` used when the plateau search finds no stable region.
+PENALTY_ADJUST_FALLBACK: Final[float] = 2.0
+
 #: Consistency constant that rescales the Median Absolute Deviation to the
 #: standard deviation of a Gaussian: ``sigma = MAD / Phi^{-1}(0.75) = 1.4826 * MAD``.
 _MAD_TO_SIGMA: Final[float] = 1.4826
@@ -90,6 +102,54 @@ def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
     return change_indexes
 
 
+def _prepare_core(x: np.ndarray) -> tuple[np.ndarray | None, int]:
+    """Trim leading/trailing NaN and linearly interpolate interior NaN.
+
+    Returns ``(core, left)`` where ``left`` is the offset that maps
+    core-relative indices back to positions in the original ``x``, or
+    ``(None, 0)`` when the series is entirely NaN.
+    """
+    is_nan = np.isnan(x)
+    if is_nan.all():
+        return None, 0
+
+    valid_positions = np.where(~is_nan)[0]
+    left, right = int(valid_positions[0]), int(valid_positions[-1])
+    core = np.asarray(x[left : right + 1], dtype=float).copy()
+
+    core_is_nan = np.isnan(core)
+    if core_is_nan.any():
+        idx = np.arange(core.size)
+        core[core_is_nan] = np.interp(idx[core_is_nan], idx[~core_is_nan], core[~core_is_nan])
+    return core, left
+
+
+def _build_searcher(search_method: str, cost_model: str):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        match search_method:
+            case "pelt":
+                return rpt.KernelCPD(kernel="linear", min_size=2, jump=1)  # written in C lang
+            case "binseg":
+                return rpt.Binseg(model=cost_model, jump=1)
+            case "bottomup":
+                return rpt.BottomUp(model=cost_model, jump=1)
+            case _:
+                raise ValueError(f"search_method={search_method} is not supported.")
+
+
+def _base_penalty(core: np.ndarray, penalty: str | float, sigma_estimator: str) -> float:
+    """Derive the un-adjusted penalty (before the ``penalty_adjust`` multiplier)."""
+    sigma = _estimate_sigma(core, sigma_estimator)
+    match penalty:
+        case "aic":
+            return sigma * sigma
+        case "bic":
+            return float(np.log(core.size)) * sigma * sigma
+        case _:
+            return float(penalty)
+
+
 def detect_univariate_changepoints(
     x: np.ndarray,
     search_method: str,
@@ -130,45 +190,14 @@ def detect_univariate_changepoints(
     """
     missing_value_cps = {int(i) for i in _detect_changepoints_with_missing_values(x)}
 
-    is_nan = np.isnan(x)
-    if is_nan.all():
-        # Nothing to segment; only the missing-value boundaries remain.
+    core, left = _prepare_core(x)
+    if core is None or core.size < 2:
+        # All-NaN input, or too short after trimming (KernelCPD needs min_size=2
+        # samples); only the missing-value boundaries remain.
         return sorted(missing_value_cps)
 
-    # Trim leading/trailing NaN and remember the left offset for index remapping.
-    valid_positions = np.where(~is_nan)[0]
-    left, right = int(valid_positions[0]), int(valid_positions[-1])
-    core = np.asarray(x[left : right + 1], dtype=float).copy()
-
-    # Linearly interpolate interior NaN so the axis length (hence indices) is preserved.
-    core_is_nan = np.isnan(core)
-    if core_is_nan.any():
-        idx = np.arange(core.size)
-        core[core_is_nan] = np.interp(idx[core_is_nan], idx[~core_is_nan], core[~core_is_nan])
-
-    if core.size < 2:
-        # KernelCPD requires at least min_size (=2) samples; only NaN boundaries remain.
-        return sorted(missing_value_cps)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        match search_method:
-            case "pelt":
-                searcher = rpt.KernelCPD(kernel="linear", min_size=2, jump=1)  # written in C lang
-            case "binseg":
-                searcher = rpt.Binseg(model=cost_model, jump=1)
-            case "bottomup":
-                searcher = rpt.BottomUp(model=cost_model, jump=1)
-            case _:
-                raise ValueError(f"search_method={search_method} is not supported.")
-    sigma = _estimate_sigma(core, sigma_estimator)
-    match penalty:
-        case "aic":
-            pen = sigma * sigma
-        case "bic":
-            pen = np.log(core.size) * sigma * sigma
-        case _:
-            pen = float(penalty)
+    searcher = _build_searcher(search_method, cost_model)
+    pen = _base_penalty(core, penalty, sigma_estimator)
     try:
         cps = searcher.fit(core).predict(pen=pen * penalty_adjust)
     except BadSegmentationParameters:
@@ -181,6 +210,23 @@ def detect_univariate_changepoints(
     # Map core-relative indices back onto the original series before unioning.
     remapped_cps = {int(cp) + left for cp in cps}
     return sorted(remapped_cps | missing_value_cps)
+
+
+def _aggregate_multi_changepoints(
+    metrics: list[str], multi_change_points: list[list[int]]
+) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]]]:
+    cp_to_metrics: dict[int, list[str]] = defaultdict(list)
+    for metric, change_points in zip(metrics, multi_change_points):
+        if change_points is None or len(change_points) < 1:
+            cp_to_metrics[NO_CHANGE_POINTS].append(metric)  # cp == -1 means no change point
+            continue
+        for cp in change_points:
+            cp_to_metrics[cp].append(metric)
+
+    flatten_change_points: list[int] = sum(multi_change_points, [])
+    metric_to_cps = {metric: cps for metric, cps in zip(metrics, multi_change_points) if cps is not None}
+
+    return flatten_change_points, cp_to_metrics, metric_to_cps
 
 
 def detect_multi_changepoints(
@@ -199,15 +245,185 @@ def detect_multi_changepoints(
         )
         for metric in metrics
     )
-    cp_to_metrics: dict[int, list[str]] = defaultdict(list)
-    for metric, change_points in zip(metrics, multi_change_points):
-        if change_points is None or len(change_points) < 1:
-            cp_to_metrics[NO_CHANGE_POINTS].append(metric)  # cp == -1 means no change point
+    return _aggregate_multi_changepoints(metrics, multi_change_points)
+
+
+def _univariate_penalty_path(
+    x: np.ndarray,
+    search_method: str,
+    cost_model: str,
+    penalty: str | float,
+    penalty_adjust_grid: tuple[float, ...],
+    sigma_estimator: str,
+) -> tuple[list[list[int]], list[int]]:
+    """Detect change points for every ``penalty_adjust`` candidate at once.
+
+    The searcher is fitted once and ``predict(pen=...)`` is re-run per grid
+    point, so sweeping the grid costs one ``fit`` plus ``len(grid)`` dynamic
+    programs instead of ``len(grid)`` full detections.
+
+    Returns ``(path, missing_value_cps)`` where ``path[g]`` holds the detected
+    change points (remapped to original positions, **excluding** missing-value
+    boundaries) for grid point ``g``. Missing-value boundaries are returned
+    separately because they are penalty-invariant: including them in the
+    plateau comparison would inflate every adjacent similarity toward 1.
+    """
+    missing_value_cps = sorted({int(i) for i in _detect_changepoints_with_missing_values(x)})
+
+    core, left = _prepare_core(x)
+    if core is None or core.size < 2:
+        return [[] for _ in penalty_adjust_grid], missing_value_cps
+
+    searcher = _build_searcher(search_method, cost_model)
+    base_pen = _base_penalty(core, penalty, sigma_estimator)
+    fitted = searcher.fit(core)
+
+    path: list[list[int]] = []
+    for adjust in penalty_adjust_grid:
+        try:
+            cps = fitted.predict(pen=base_pen * adjust)
+        except BadSegmentationParameters:
+            path.append([])
             continue
-        for cp in change_points:
-            cp_to_metrics[cp].append(metric)
+        if cps is None:
+            raise ValueError("Change point detection failed: predict() returned None.")
+        path.append(sorted(int(cp) + left for cp in cps[:-1]))
+    return path, missing_value_cps
 
-    flatten_change_points: list[int] = sum(multi_change_points, [])
-    metric_to_cps = {metric: cps for metric, cps in zip(metrics, multi_change_points) if cps is not None}
 
-    return flatten_change_points, cp_to_metrics, metric_to_cps
+def _tolerant_matched_count(a: list[int], b: list[int], tolerance: int) -> int:
+    """Count greedily matched pairs between two sorted lists within ``tolerance``."""
+    i = j = matched = 0
+    while i < len(a) and j < len(b):
+        if abs(a[i] - b[j]) <= tolerance:
+            matched += 1
+            i += 1
+            j += 1
+        elif a[i] < b[j]:
+            i += 1
+        else:
+            j += 1
+    return matched
+
+
+def select_penalty_adjust(
+    paths: list[list[list[int]]],
+    series_length: int,
+    penalty_adjust_grid: tuple[float, ...] = PENALTY_ADJUST_GRID,
+    plateau_threshold: float = PLATEAU_JACCARD_THRESHOLD,
+) -> tuple[float, dict]:
+    """Pick ``penalty_adjust`` by penalty-plateau detection (stability selection).
+
+    The penalty multiplier acts on every metric independently, so the natural
+    perturbation axis for a stability argument is the multiplier itself: a value
+    whose change-point set barely moves across a wide range of neighboring
+    multipliers sits far from both the over-segmentation regime (small values,
+    results churn) and the missed-detection regime (large values, results decay
+    to nothing).
+
+    For each pair of adjacent grid points the change-point sets of all metrics
+    are compared with a position-tolerant Jaccard similarity (tolerance
+    ``max(1, round(0.01 * series_length))``, absorbing 1-2 sample jitter in
+    PELT's optimum as the penalty moves). The widest run of pairs whose
+    similarity is at least ``plateau_threshold`` -- with a non-empty result on
+    both sides, so that the trivially stable "nothing detected" tail never
+    counts -- is the plateau; its midpoint grid value is returned. Ties prefer
+    the plateau whose midpoint is closest to the historical default 2.0. When
+    no plateau exists, the default ``PENALTY_ADJUST_FALLBACK`` is returned.
+
+    Args:
+        paths: ``paths[m][g]`` = sorted change points of metric ``m`` at grid
+            point ``g`` (missing-value boundaries excluded).
+        series_length: Length of the time axis (defines the match tolerance).
+        penalty_adjust_grid: Ascending candidate multipliers.
+        plateau_threshold: Minimum adjacent similarity within a plateau.
+
+    Returns:
+        ``(resolved, diagnostics)`` where diagnostics carries ``grid``,
+        ``n_change_points``, ``adjacent_jaccard``, ``plateau`` and ``reason``.
+    """
+    grid = [float(a) for a in penalty_adjust_grid]
+    n_grid = len(grid)
+    tolerance = max(1, round(0.01 * series_length))
+
+    counts = [sum(len(path[g]) for path in paths) for g in range(n_grid)]
+    jaccards: list[float] = []
+    for g in range(n_grid - 1):
+        intersection = sum(_tolerant_matched_count(path[g], path[g + 1], tolerance) for path in paths)
+        union = counts[g] + counts[g + 1] - intersection
+        jaccards.append(intersection / union if union > 0 else 1.0)
+
+    diagnostics: dict = {"grid": grid, "n_change_points": counts, "adjacent_jaccard": jaccards}
+
+    best: tuple[int, float, int, int] | None = None  # (width, -|mid - 2.0|, start, end)
+    g = 0
+    while g < n_grid - 1:
+        if jaccards[g] >= plateau_threshold and counts[g] > 0 and counts[g + 1] > 0:
+            start = g
+            while g < n_grid - 1 and jaccards[g] >= plateau_threshold and counts[g] > 0 and counts[g + 1] > 0:
+                g += 1
+            end = g  # plateau spans grid[start..end] inclusive
+            midpoint = grid[(start + end) // 2]
+            candidate = (end - start, -abs(midpoint - PENALTY_ADJUST_FALLBACK), start, end)
+            if best is None or candidate[:2] > best[:2]:
+                best = candidate
+        else:
+            g += 1
+
+    if best is None:
+        diagnostics["plateau"] = None
+        diagnostics["reason"] = "no_plateau"
+        return PENALTY_ADJUST_FALLBACK, diagnostics
+
+    _, _, start, end = best
+    diagnostics["plateau"] = (grid[start], grid[end])
+    diagnostics["reason"] = "plateau"
+    return grid[(start + end) // 2], diagnostics
+
+
+def detect_multi_changepoints_with_penalty_tuning(
+    X: pd.DataFrame,
+    search_method: str,
+    cost_model: str,
+    penalty: str | float,
+    n_jobs: int = -1,
+    sigma_estimator: str = "std",
+    penalty_adjust_grid: tuple[float, ...] = PENALTY_ADJUST_GRID,
+) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]], float, dict]:
+    """Like :func:`detect_multi_changepoints`, but with ``penalty_adjust`` tuned.
+
+    Computes the penalty path of every metric in parallel, selects the plateau
+    multiplier via :func:`select_penalty_adjust`, and assembles the final
+    change points from the already-computed path at the chosen grid point (no
+    re-detection), unioned with the penalty-invariant missing-value boundaries.
+
+    Returns ``(flatten_change_points, cp_to_metrics, metric_to_cps,
+    resolved_penalty_adjust, diagnostics)``.
+    """
+    metrics: list[str] = X.columns.tolist()
+    grid = tuple(float(a) for a in penalty_adjust_grid)
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_univariate_penalty_path)(
+            X[metric].to_numpy(), search_method, cost_model, penalty, grid, sigma_estimator
+        )
+        for metric in metrics
+    )
+    paths = [path for path, _ in results]
+    missing_value_cps = [mv_cps for _, mv_cps in results]
+
+    resolved, diagnostics = select_penalty_adjust(paths, series_length=X.shape[0], penalty_adjust_grid=grid)
+    if not metrics:
+        diagnostics["reason"] = "no_metrics"
+
+    if resolved in grid:
+        g_star = grid.index(resolved)
+        multi_change_points = [
+            sorted(set(path[g_star]) | set(mv_cps)) for path, mv_cps in zip(paths, missing_value_cps)
+        ]
+        flatten, cp_to_metrics, metric_to_cps = _aggregate_multi_changepoints(metrics, multi_change_points)
+    else:
+        # A custom grid may not contain the fallback multiplier; detect once at it.
+        flatten, cp_to_metrics, metric_to_cps = detect_multi_changepoints(
+            X, search_method, cost_model, penalty, resolved, n_jobs=n_jobs, sigma_estimator=sigma_estimator
+        )
+    return flatten, cp_to_metrics, metric_to_cps, resolved, diagnostics

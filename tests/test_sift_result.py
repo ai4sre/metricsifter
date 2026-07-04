@@ -178,6 +178,8 @@ class TestSerialization:
             "metric_to_change_times",
             "segments",
             "selected_segment",
+            "penalty_tuning",
+            "bandwidth_tuning",
         }
 
 

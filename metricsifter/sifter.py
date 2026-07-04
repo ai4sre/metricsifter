@@ -6,10 +6,13 @@ import pandas as pd
 from metricsifter import utils
 from metricsifter.algo import detection, segmentation
 from metricsifter.algo.detection import SIGMA_ESTIMATORS
-from metricsifter.types import Segment, SegmentCandidate, SegmentInfo, SiftResult
+from metricsifter.types import BandwidthTuning, PenaltyTuning, Segment, SegmentCandidate, SegmentInfo, SiftResult
 
 #: KDE bandwidth rule-of-thumb names accepted by ``bandwidth`` (in addition to a float).
 BANDWIDTH_RULES: frozenset[str] = frozenset({"scott", "silverman"})
+
+#: Sentinel that turns on stability-selection auto-tuning for a parameter.
+AUTO: str = "auto"
 
 
 class Sifter:
@@ -18,11 +21,12 @@ class Sifter:
         search_method: str = "pelt",
         cost_model: str = "l2",
         penalty: str | float = "bic",
-        penalty_adjust: float = 2.0,
+        penalty_adjust: float | str = 2.0,
         bandwidth: float | str = 2.5,
         segment_selection_method: str | Callable[[SegmentCandidate], float] = "weighted_max",
         n_jobs: int = 1,
         sigma_estimator: str = "std",
+        random_state: int | None = None,
     ) -> None:
         """Configure the feature-reduction pipeline.
 
@@ -31,11 +35,18 @@ class Sifter:
                 / ``"bottomup"``).
             cost_model: Cost model for ``binseg`` / ``bottomup`` (e.g. ``"l2"``).
             penalty: ``"bic"``, ``"aic"``, or a numeric penalty passed to ruptures.
-            penalty_adjust: Multiplier applied to the derived penalty.
+            penalty_adjust: Multiplier applied to the derived penalty (default
+                ``2.0``), or ``"auto"`` to choose it by penalty-plateau
+                stability selection (see
+                :func:`metricsifter.algo.detection.select_penalty_adjust`); the
+                chosen value is reported in ``SiftResult.penalty_tuning``.
             bandwidth: KDE bandwidth for change-point segmentation. Either a
-                ``float`` (fixed bandwidth, default ``2.5``) or one of the
+                ``float`` (fixed bandwidth, default ``2.5``), one of the
                 data-driven rule-of-thumb names ``"scott"`` / ``"silverman"``
-                (computed by statsmodels from the change-point distribution).
+                (computed by statsmodels from the change-point distribution),
+                or ``"auto"`` to choose it by bootstrap stability selection
+                (see :func:`metricsifter.algo.segmentation.select_bandwidth`);
+                the chosen value is reported in ``SiftResult.bandwidth_tuning``.
             segment_selection_method: How to pick the "densest" segment. Either a
                 built-in name (``"max"`` = most metrics, ``"weighted_max"`` =
                 sum of ``1 / len(change_points)`` per metric) or a custom
@@ -47,18 +58,23 @@ class Sifter:
                 ``"mad"`` for spiky/outlier-prone metrics and ``"diff_std"`` for
                 trending or level-shifting metrics; see
                 :func:`metricsifter.algo.detection._estimate_sigma`.
+            random_state: Seed for the ``bandwidth="auto"`` bootstrap (``None``
+                = OS entropy). Fix it for reproducible auto-tuning.
 
         Raises:
-            ValueError: If ``sigma_estimator`` or a string ``bandwidth`` is not
-                one of the supported values.
+            ValueError: If ``sigma_estimator``, a string ``penalty_adjust`` or a
+                string ``bandwidth`` is not one of the supported values.
         """
         if sigma_estimator not in SIGMA_ESTIMATORS:
             raise ValueError(
                 f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
             )
-        if isinstance(bandwidth, str) and bandwidth not in BANDWIDTH_RULES:
+        if isinstance(penalty_adjust, str) and penalty_adjust != AUTO:
+            raise ValueError(f"penalty_adjust={penalty_adjust!r} is not supported. Pass a float or {AUTO!r}.")
+        if isinstance(bandwidth, str) and bandwidth not in BANDWIDTH_RULES | {AUTO}:
             raise ValueError(
-                f"bandwidth={bandwidth!r} is not supported. " f"Pass a float or one of {sorted(BANDWIDTH_RULES)}."
+                f"bandwidth={bandwidth!r} is not supported. "
+                f"Pass a float or one of {sorted(BANDWIDTH_RULES | {AUTO})}."
             )
         self.search_method = search_method
         self.cost_model = cost_model
@@ -68,6 +84,7 @@ class Sifter:
         self.segment_selection_method = segment_selection_method
         self.n_jobs = n_jobs
         self.sigma_estimator = sigma_estimator
+        self.random_state = random_state
 
     @staticmethod
     def _filter_no_changes(X: pd.DataFrame, n_jobs: int = -1) -> pd.DataFrame:
@@ -84,6 +101,71 @@ class Sifter:
             return X.loc[:, utils.parallel_apply(X, filter, n_jobs)]
         return X.loc[:, X.apply(filter)]
 
+    def _detect_changepoints(
+        self, X: pd.DataFrame
+    ) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]], PenaltyTuning | None]:
+        """STEP1: detect change points, tuning ``penalty_adjust`` when requested."""
+        if self.penalty_adjust == AUTO:
+            flatten, cp_to_metrics, metric_to_cps, resolved, diag = (
+                detection.detect_multi_changepoints_with_penalty_tuning(
+                    X,
+                    search_method=self.search_method,
+                    cost_model=self.cost_model,
+                    penalty=self.penalty,
+                    sigma_estimator=self.sigma_estimator,
+                    n_jobs=self.n_jobs,
+                )
+            )
+            tuning = PenaltyTuning(
+                requested=self.penalty_adjust,
+                resolved=resolved,
+                grid=diag["grid"],
+                n_change_points=diag["n_change_points"],
+                adjacent_jaccard=diag["adjacent_jaccard"],
+                plateau=diag["plateau"],
+                reason=diag["reason"],
+            )
+            return flatten, cp_to_metrics, metric_to_cps, tuning
+
+        flatten, cp_to_metrics, metric_to_cps = detection.detect_multi_changepoints(
+            X,
+            search_method=self.search_method,
+            cost_model=self.cost_model,
+            penalty=self.penalty,
+            penalty_adjust=float(self.penalty_adjust),
+            sigma_estimator=self.sigma_estimator,
+            n_jobs=self.n_jobs,
+        )
+        return flatten, cp_to_metrics, metric_to_cps, None
+
+    def _resolve_bandwidth(
+        self,
+        flatten_change_points: list[int],
+        cp_to_metrics: dict[int, list[str]],
+        metric_to_cps: dict[str, list[int]],
+        time_series_length: int,
+    ) -> tuple[float | str, BandwidthTuning | None]:
+        """Resolve the KDE bandwidth, tuning it when ``"auto"`` was requested."""
+        if self.bandwidth != AUTO:
+            return self.bandwidth, None
+        resolved, diag = segmentation.select_bandwidth(
+            flatten_change_points,
+            cp_to_metrics,
+            metric_to_cps,
+            time_series_length=time_series_length,
+            selector=self.select_largest_segment_with_label,
+            random_state=self.random_state,
+        )
+        tuning = BandwidthTuning(
+            requested=self.bandwidth,
+            resolved=resolved,
+            grid=diag["grid"],
+            stability=diag["stability"],
+            n_segments=diag["n_segments"],
+            reason=diag["reason"],
+        )
+        return resolved, tuning
+
     def run_upto_cpd(self, data: pd.DataFrame, without_simple_filter: bool = False) -> pd.DataFrame:
         """Run up to change point detection"""
         if without_simple_filter:
@@ -93,15 +175,7 @@ class Sifter:
             X = self._filter_no_changes(data, n_jobs=self.n_jobs)
 
         # STEP1: detect change points
-        _, _, metric_to_cps = detection.detect_multi_changepoints(
-            X,
-            search_method=self.search_method,
-            cost_model=self.cost_model,
-            penalty=self.penalty,
-            penalty_adjust=self.penalty_adjust,
-            sigma_estimator=self.sigma_estimator,
-            n_jobs=self.n_jobs,
-        )
+        _, _, metric_to_cps, _ = self._detect_changepoints(X)
         remained_metrics = set(metric for metric, cps in metric_to_cps.items() if len(cps) > 0)
         return X.loc[:, list(remained_metrics)]
 
@@ -173,15 +247,7 @@ class Sifter:
         has_datetime = isinstance(index, pd.DatetimeIndex)
 
         # STEP1: detect change points
-        flatten_change_points, cp_to_metrics, metric_to_cps = detection.detect_multi_changepoints(
-            X,
-            search_method=self.search_method,
-            cost_model=self.cost_model,
-            penalty=self.penalty,
-            penalty_adjust=self.penalty_adjust,
-            sigma_estimator=self.sigma_estimator,
-            n_jobs=self.n_jobs,
-        )
+        flatten_change_points, cp_to_metrics, metric_to_cps, penalty_tuning = self._detect_changepoints(X)
 
         metric_to_change_points = {metric: [int(cp) for cp in cps] for metric, cps in metric_to_cps.items()}
         filtered_no_change_points = frozenset(
@@ -196,6 +262,13 @@ class Sifter:
         if not flatten_change_points:
             # Return a fully empty DataFrame (no index) to preserve the legacy
             # behavior of run() / run_with_selected_segment().
+            bandwidth_tuning = None
+            if self.bandwidth == AUTO:
+                bandwidth_tuning = BandwidthTuning(
+                    requested=self.bandwidth,
+                    resolved=segmentation.BANDWIDTH_FALLBACK,
+                    reason="no_change_points",
+                )
             return SiftResult(
                 data=pd.DataFrame(),
                 selected_metrics=frozenset(),
@@ -206,14 +279,19 @@ class Sifter:
                 metric_to_change_times=metric_to_change_times,
                 segments=[],
                 selected_segment=None,
+                penalty_tuning=penalty_tuning,
+                bandwidth_tuning=bandwidth_tuning,
             )
 
-        # STEP2: segment change points
+        # STEP2: segment change points (resolving bandwidth="auto" first)
+        bandwidth, bandwidth_tuning = self._resolve_bandwidth(
+            flatten_change_points, cp_to_metrics, metric_to_cps, time_series_length=X.shape[0]
+        )
         cluster_label_to_metrics, label_to_change_points = segmentation.segment_nested_changepoints(
             flatten_change_points=flatten_change_points,
             cp_to_metrics=cp_to_metrics,
             time_series_length=X.shape[0],
-            kde_bandwidth=self.bandwidth,
+            kde_bandwidth=bandwidth,
         )
 
         # STEP3: select the largest (densest) segment
@@ -259,6 +337,8 @@ class Sifter:
             metric_to_change_times=metric_to_change_times,
             segments=segments,
             selected_segment=selected_segment,
+            penalty_tuning=penalty_tuning,
+            bandwidth_tuning=bandwidth_tuning,
         )
 
     @staticmethod

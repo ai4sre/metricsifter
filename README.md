@@ -137,8 +137,34 @@ since positions are converted to times purely by index lookup. `run()` and
 
 ## Algorithm Tuning
 
-Three optional knobs let you adapt the pipeline to your data. All are backward
+Several optional knobs let you adapt the pipeline to your data. All are backward
 compatible: the defaults reproduce the original behavior exactly.
+
+**Fully automatic tuning (`penalty_adjust="auto"` / `bandwidth="auto"`).** Both
+main hyperparameters can be chosen from the data by stability selection:
+
+- `penalty_adjust="auto"` sweeps the penalty multiplier over a geometric grid
+  (one change-point `fit` per metric, then cheap re-`predict` per candidate) and
+  picks the midpoint of the widest *plateau* -- the range of multipliers over
+  which the detected change points barely move. A stable plateau sits away from
+  both the over-segmentation regime (small multipliers) and the
+  missed-detection regime (large multipliers). Deterministic, no randomness.
+- `bandwidth="auto"` bootstrap-resamples the metrics (change points stay fixed,
+  so only the cheap KDE segmentation reruns) and picks the bandwidth whose
+  final `selected_metrics` is the most reproducible across resamples. Only
+  bandwidths that still split the data into at least two segments compete, so
+  the degenerate "one giant segment" solution can never win. Seed it with
+  `random_state` for reproducibility.
+
+The chosen values and their diagnostics are reported in
+`SiftResult.penalty_tuning` / `SiftResult.bandwidth_tuning` (also included in
+`to_json()` and the CLI `--report`).
+
+```python
+result = Sifter(penalty_adjust="auto", bandwidth="auto", random_state=0, n_jobs=1).sift(data)
+print(result.penalty_tuning.resolved, result.penalty_tuning.reason)    # e.g. 2.0 plateau
+print(result.bandwidth_tuning.resolved, result.bandwidth_tuning.reason)  # e.g. 1.5 stability
+```
 
 **Robust penalty (`sigma_estimator`).** The change-point penalty scales with an
 estimate of the noise scale `sigma`. The default `"std"` uses the global standard
@@ -276,6 +302,10 @@ metricsifter run input.csv --output sifted.csv --report report.json \
 # By default every column is treated as a metric; pass --index-col when the
 # CSV has a time/index column.
 metricsifter run input.csv --index-col 0 --parse-dates
+
+# Auto-tune both hyperparameters by stability selection (see Algorithm Tuning);
+# the chosen values land in the --report JSON under penalty_tuning / bandwidth_tuning.
+metricsifter run input.csv --penalty-adjust auto --bandwidth auto --random-state 0 --report report.json
 ```
 
 Exit codes: `0` on success, `2` on input errors (missing/empty/unparseable CSV, or bad

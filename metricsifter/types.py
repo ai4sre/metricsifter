@@ -100,6 +100,114 @@ class SegmentInfo:
         )
 
 
+@dataclass(frozen=True)
+class PenaltyTuning:
+    """Diagnostic report of the ``penalty_adjust="auto"`` plateau search.
+
+    The tuner sweeps ``penalty_adjust`` over a geometric ``grid`` and keeps, for
+    each grid point, the change points detected across all metrics. Adjacent
+    grid points are compared with a position-tolerant Jaccard similarity; the
+    widest run of similar results (a *plateau*) marks penalties that are far
+    from both the over-segmentation and the missed-detection regimes, and its
+    midpoint is chosen as ``resolved``.
+
+    Attributes:
+        requested: The constructor value that triggered tuning (``"auto"``).
+        resolved: The concrete ``penalty_adjust`` the pipeline actually used.
+        grid: Candidate multipliers, in ascending order.
+        n_change_points: Total change points detected at each grid point.
+        adjacent_jaccard: Tolerant Jaccard similarity between consecutive grid
+            points (length ``len(grid) - 1``).
+        plateau: ``(low, high)`` grid values bounding the selected plateau, or
+            ``None`` when no plateau was found and the default was used.
+        reason: Why ``resolved`` was chosen (``"plateau"``, ``"no_plateau"``,
+            ``"no_metrics"``).
+    """
+
+    requested: float | str
+    resolved: float
+    grid: list[float] = field(default_factory=list)
+    n_change_points: list[int] = field(default_factory=list)
+    adjacent_jaccard: list[float] = field(default_factory=list)
+    plateau: tuple[float, float] | None = None
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "requested": self.requested,
+            "resolved": float(self.resolved),
+            "grid": [float(a) for a in self.grid],
+            "n_change_points": [int(n) for n in self.n_change_points],
+            "adjacent_jaccard": [float(j) for j in self.adjacent_jaccard],
+            "plateau": [float(self.plateau[0]), float(self.plateau[1])] if self.plateau is not None else None,
+            "reason": self.reason,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "PenaltyTuning":
+        plateau = d.get("plateau")
+        return cls(
+            requested=d["requested"],
+            resolved=d["resolved"],
+            grid=list(d.get("grid", [])),
+            n_change_points=list(d.get("n_change_points", [])),
+            adjacent_jaccard=list(d.get("adjacent_jaccard", [])),
+            plateau=(plateau[0], plateau[1]) if plateau is not None else None,
+            reason=d.get("reason", ""),
+        )
+
+
+@dataclass(frozen=True)
+class BandwidthTuning:
+    """Diagnostic report of the ``bandwidth="auto"`` stability selection.
+
+    For each candidate bandwidth the tuner re-segments bootstrap resamples of
+    the metrics (drawn with replacement, shared across candidates) and scores
+    how consistently the same ``selected_metrics`` come out (mean pairwise
+    Jaccard). Only candidates whose full-data segmentation yields at least two
+    segments are admissible -- this blocks the degenerate "one giant segment"
+    solution whose stability is trivially perfect.
+
+    Attributes:
+        requested: The constructor value that triggered tuning (``"auto"``).
+        resolved: The concrete bandwidth the pipeline actually used.
+        grid: Candidate bandwidths, in ascending order.
+        stability: Mean pairwise Jaccard per candidate; ``None`` marks an
+            inadmissible candidate (fewer than two full-data segments).
+        n_segments: Full-data segment count per candidate.
+        reason: Why ``resolved`` was chosen (``"stability"``, ``"unimodal"``,
+            ``"too_few_change_points"``, ``"no_change_points"``).
+    """
+
+    requested: float | str
+    resolved: float
+    grid: list[float] = field(default_factory=list)
+    stability: list[float | None] = field(default_factory=list)
+    n_segments: list[int] = field(default_factory=list)
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "requested": self.requested,
+            "resolved": float(self.resolved),
+            "grid": [float(h) for h in self.grid],
+            "stability": [float(s) if s is not None else None for s in self.stability],
+            "n_segments": [int(n) for n in self.n_segments],
+            "reason": self.reason,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "BandwidthTuning":
+        return cls(
+            requested=d["requested"],
+            resolved=d["resolved"],
+            grid=list(d.get("grid", [])),
+            stability=list(d.get("stability", [])),
+            n_segments=list(d.get("n_segments", [])),
+            reason=d.get("reason", ""),
+        )
+
+
 @dataclass
 class SiftResult:
     """Diagnostic, explainable result of :meth:`metricsifter.sifter.Sifter.sift`.
@@ -128,6 +236,10 @@ class SiftResult:
         segments: Every candidate segment discovered during KDE segmentation.
         selected_segment: The chosen densest segment (``None`` when no change
             points were detected at all).
+        penalty_tuning: Report of the ``penalty_adjust="auto"`` search
+            (``None`` unless auto-tuning was requested).
+        bandwidth_tuning: Report of the ``bandwidth="auto"`` search (``None``
+            unless auto-tuning was requested).
     """
 
     data: pd.DataFrame | None
@@ -139,6 +251,8 @@ class SiftResult:
     metric_to_change_times: dict[str, list[pd.Timestamp]] | None = None
     segments: list[SegmentInfo] = field(default_factory=list)
     selected_segment: SegmentInfo | None = None
+    penalty_tuning: PenaltyTuning | None = None
+    bandwidth_tuning: BandwidthTuning | None = None
 
     def to_dict(self) -> dict:
         """Serialize to a plain, JSON-compatible dict (excludes the DataFrame)."""
@@ -159,6 +273,8 @@ class SiftResult:
             ),
             "segments": [segment.to_dict() for segment in self.segments],
             "selected_segment": self.selected_segment.to_dict() if self.selected_segment is not None else None,
+            "penalty_tuning": self.penalty_tuning.to_dict() if self.penalty_tuning is not None else None,
+            "bandwidth_tuning": self.bandwidth_tuning.to_dict() if self.bandwidth_tuning is not None else None,
         }
 
     def to_json(self, **kwargs) -> str:
@@ -177,6 +293,8 @@ class SiftResult:
             else None
         )
         selected = d.get("selected_segment")
+        penalty_tuning = d.get("penalty_tuning")
+        bandwidth_tuning = d.get("bandwidth_tuning")
         return cls(
             data=None,
             selected_metrics=frozenset(d["selected_metrics"]),
@@ -187,6 +305,8 @@ class SiftResult:
             metric_to_change_times=metric_to_change_times,
             segments=[SegmentInfo.from_dict(s) for s in d["segments"]],
             selected_segment=SegmentInfo.from_dict(selected) if selected is not None else None,
+            penalty_tuning=PenaltyTuning.from_dict(penalty_tuning) if penalty_tuning is not None else None,
+            bandwidth_tuning=BandwidthTuning.from_dict(bandwidth_tuning) if bandwidth_tuning is not None else None,
         )
 
     @classmethod

@@ -43,6 +43,8 @@ class TestRun:
             "metric_to_change_times",
             "segments",
             "selected_segment",
+            "penalty_tuning",
+            "bandwidth_tuning",
         }
 
     def test_stdout_when_no_output(self, capsys, input_csv):
