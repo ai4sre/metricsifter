@@ -17,8 +17,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from typing import Callable
+
 from metricsifter.sifter import Sifter
-from metricsifter.types import SiftResult
+from metricsifter.types import SegmentCandidate, SiftResult
 
 # The constructor parameters shared with Sifter, plus the sift() switch. Kept in
 # one place so get_params / set_params / clone stay in lock-step with __init__.
@@ -31,6 +33,7 @@ _PARAM_NAMES = (
     "segment_selection_method",
     "n_jobs",
     "without_simple_filter",
+    "sigma_estimator",
 )
 
 
@@ -52,10 +55,11 @@ class SifterTransformer:
         cost_model: str = "l2",
         penalty: str | float = "bic",
         penalty_adjust: float = 2.0,
-        bandwidth: float = 2.5,
-        segment_selection_method: str = "weighted_max",
+        bandwidth: float | str = 2.5,
+        segment_selection_method: str | Callable[[SegmentCandidate], float] = "weighted_max",
         n_jobs: int = 1,
         without_simple_filter: bool = False,
+        sigma_estimator: str = "std",
     ) -> None:
         # Store every argument verbatim under its own name (sklearn convention;
         # required for get_params/clone round-trips to be exact).
@@ -67,6 +71,7 @@ class SifterTransformer:
         self.segment_selection_method = segment_selection_method
         self.n_jobs = n_jobs
         self.without_simple_filter = without_simple_filter
+        self.sigma_estimator = sigma_estimator
 
     # -- scikit-learn estimator protocol ---------------------------------
 
@@ -94,6 +99,7 @@ class SifterTransformer:
             bandwidth=self.bandwidth,
             segment_selection_method=self.segment_selection_method,
             n_jobs=self.n_jobs,
+            sigma_estimator=self.sigma_estimator,
         )
 
     @staticmethod

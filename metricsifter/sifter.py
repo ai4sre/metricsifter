@@ -5,7 +5,11 @@ import pandas as pd
 
 from metricsifter import utils
 from metricsifter.algo import detection, segmentation
-from metricsifter.types import Segment, SegmentInfo, SiftResult
+from metricsifter.algo.detection import SIGMA_ESTIMATORS
+from metricsifter.types import Segment, SegmentCandidate, SegmentInfo, SiftResult
+
+#: KDE bandwidth rule-of-thumb names accepted by ``bandwidth`` (in addition to a float).
+BANDWIDTH_RULES: frozenset[str] = frozenset({"scott", "silverman"})
 
 
 class Sifter:
@@ -15,10 +19,47 @@ class Sifter:
         cost_model: str = "l2",
         penalty: str | float = "bic",
         penalty_adjust: float = 2.0,
-        bandwidth: float = 2.5,
-        segment_selection_method: str = "weighted_max",
+        bandwidth: float | str = 2.5,
+        segment_selection_method: str | Callable[[SegmentCandidate], float] = "weighted_max",
         n_jobs: int = 1,
+        sigma_estimator: str = "std",
     ) -> None:
+        """Configure the feature-reduction pipeline.
+
+        Args:
+            search_method: Change-point search algorithm (``"pelt"`` / ``"binseg"``
+                / ``"bottomup"``).
+            cost_model: Cost model for ``binseg`` / ``bottomup`` (e.g. ``"l2"``).
+            penalty: ``"bic"``, ``"aic"``, or a numeric penalty passed to ruptures.
+            penalty_adjust: Multiplier applied to the derived penalty.
+            bandwidth: KDE bandwidth for change-point segmentation. Either a
+                ``float`` (fixed bandwidth, default ``2.5``) or one of the
+                data-driven rule-of-thumb names ``"scott"`` / ``"silverman"``
+                (computed by statsmodels from the change-point distribution).
+            segment_selection_method: How to pick the "densest" segment. Either a
+                built-in name (``"max"`` = most metrics, ``"weighted_max"`` =
+                sum of ``1 / len(change_points)`` per metric) or a custom
+                ``Callable[[SegmentCandidate], float]`` whose highest-scoring
+                segment is selected.
+            n_jobs: Parallelism for detection/filtering (joblib convention).
+            sigma_estimator: Noise-scale estimator behind the AIC/BIC penalty
+                (``"std"`` / ``"mad"`` / ``"diff_std"``, default ``"std"``). Use
+                ``"mad"`` for spiky/outlier-prone metrics and ``"diff_std"`` for
+                trending or level-shifting metrics; see
+                :func:`metricsifter.algo.detection._estimate_sigma`.
+
+        Raises:
+            ValueError: If ``sigma_estimator`` or a string ``bandwidth`` is not
+                one of the supported values.
+        """
+        if sigma_estimator not in SIGMA_ESTIMATORS:
+            raise ValueError(
+                f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
+            )
+        if isinstance(bandwidth, str) and bandwidth not in BANDWIDTH_RULES:
+            raise ValueError(
+                f"bandwidth={bandwidth!r} is not supported. " f"Pass a float or one of {sorted(BANDWIDTH_RULES)}."
+            )
         self.search_method = search_method
         self.cost_model = cost_model
         self.bandwidth = bandwidth
@@ -26,6 +67,7 @@ class Sifter:
         self.penalty_adjust = penalty_adjust
         self.segment_selection_method = segment_selection_method
         self.n_jobs = n_jobs
+        self.sigma_estimator = sigma_estimator
 
     @staticmethod
     def _filter_no_changes(X: pd.DataFrame, n_jobs: int = -1) -> pd.DataFrame:
@@ -57,6 +99,7 @@ class Sifter:
             cost_model=self.cost_model,
             penalty=self.penalty,
             penalty_adjust=self.penalty_adjust,
+            sigma_estimator=self.sigma_estimator,
             n_jobs=self.n_jobs,
         )
         remained_metrics = set(metric for metric, cps in metric_to_cps.items() if len(cps) > 0)
@@ -136,6 +179,7 @@ class Sifter:
             cost_model=self.cost_model,
             penalty=self.penalty,
             penalty_adjust=self.penalty_adjust,
+            sigma_estimator=self.sigma_estimator,
             n_jobs=self.n_jobs,
         )
 
@@ -174,7 +218,7 @@ class Sifter:
 
         # STEP3: select the largest (densest) segment
         selected_label, remained_metrics = self.select_largest_segment_with_label(
-            cluster_label_to_metrics, metric_to_cps
+            cluster_label_to_metrics, metric_to_cps, label_to_change_points
         )
 
         segments: list[SegmentInfo] = []
@@ -192,7 +236,9 @@ class Sifter:
                 end_index=end_index,
                 start_time=index[start_index] if has_datetime else None,
                 end_time=index[end_index] if has_datetime else None,
-                score=self._segment_score(metrics, metric_to_cps),
+                score=self._score_candidate(
+                    self._build_candidate(label, metrics, metric_to_cps, label_to_change_points)
+                ),
                 selected=(label == selected_label),
             )
             segments.append(segment)
@@ -215,19 +261,44 @@ class Sifter:
             selected_segment=selected_segment,
         )
 
-    def _segment_score(self, metrics: frozenset[str], metric_to_cps: dict[str, list[int]]) -> float:
-        """Compute the selection score of a segment under the configured method.
+    @staticmethod
+    def _build_candidate(
+        label: int,
+        metrics,
+        metric_to_cps: dict[str, list[int]],
+        label_to_change_points: dict | None = None,
+    ) -> SegmentCandidate:
+        """Assemble the :class:`SegmentCandidate` view handed to a scoring strategy."""
+        metrics_fs = frozenset(metrics)
+        raw_cps = (label_to_change_points or {}).get(label, [])
+        change_points = sorted(int(cp) for cp in raw_cps)
+        # Restrict the change-point map to this segment's metrics (all of which are
+        # guaranteed to be present in metric_to_cps, since they originate from it).
+        sub_metric_to_cps = {m: list(metric_to_cps[m]) for m in metrics_fs if m in metric_to_cps}
+        return SegmentCandidate(
+            label=int(label),
+            metrics=metrics_fs,
+            change_points=change_points,
+            metric_to_cps=sub_metric_to_cps,
+        )
+
+    def _score_candidate(self, candidate: SegmentCandidate) -> float:
+        """Score a candidate segment under the configured selection method.
 
         Mirrors select_largest_segment_with_label() so that the selected segment
-        holds the maximum score among all candidates.
+        holds the maximum score among all candidates. Supports the built-in string
+        methods and any custom ``Callable[[SegmentCandidate], float]``.
         """
-        match self.segment_selection_method:
+        method = self.segment_selection_method
+        if callable(method):
+            return float(method(candidate))
+        match method:
             case "max" | "":
-                return float(len(metrics))
+                return float(len(candidate.metrics))
             case "weighted_max":
-                return float(sum(1 / len(metric_to_cps[m]) for m in metrics))
+                return float(sum(1 / len(candidate.metric_to_cps[m]) for m in candidate.metrics))
             case _:
-                raise ValueError(f"Unknown segment_selection_method: {self.segment_selection_method}")
+                raise ValueError(f"Unknown segment_selection_method: {method!r}")
 
     def select_largest_segment(
         self,
@@ -253,12 +324,17 @@ class Sifter:
         self,
         cluster_label_to_metrics: dict,
         metric_to_cps: dict[str, list[int]],
+        label_to_change_points: dict | None = None,
     ) -> tuple[int | None, set[str]]:
         """Select the largest segment and return its label and metrics
 
         Args:
             cluster_label_to_metrics: Mapping from segment ID to metrics set
             metric_to_cps: Mapping from metric name to change points list
+            label_to_change_points: Mapping from segment ID to its change points.
+                Only needed by a custom ``Callable`` selection strategy so it can
+                read ``SegmentCandidate.change_points``; ignored by the built-in
+                string strategies and optional for backward compatibility.
 
         Returns:
             tuple[int | None, set[str]]:
@@ -268,17 +344,26 @@ class Sifter:
         if not cluster_label_to_metrics:
             return None, set()
 
-        match self.segment_selection_method:
-            case "max" | "":
-                choiced_cluster = max(cluster_label_to_metrics.items(), key=lambda x: len(x[1]))
-            case "weighted_max":
-                if metric_to_cps is None:
-                    raise ValueError("metric_to_cps should not be None")
-                choiced_cluster = max(
-                    cluster_label_to_metrics.items(), key=lambda x: sum(1 / len(metric_to_cps[m]) for m in x[1])
-                )
-            case _:
-                raise ValueError(f"Unknown segment_selection_method: {self.segment_selection_method}")
+        method = self.segment_selection_method
+        if callable(method):
+            choiced_cluster = max(
+                cluster_label_to_metrics.items(),
+                key=lambda item: self._score_candidate(
+                    self._build_candidate(item[0], item[1], metric_to_cps, label_to_change_points)
+                ),
+            )
+        else:
+            match method:
+                case "max" | "":
+                    choiced_cluster = max(cluster_label_to_metrics.items(), key=lambda x: len(x[1]))
+                case "weighted_max":
+                    if metric_to_cps is None:
+                        raise ValueError("metric_to_cps should not be None")
+                    choiced_cluster = max(
+                        cluster_label_to_metrics.items(), key=lambda x: sum(1 / len(metric_to_cps[m]) for m in x[1])
+                    )
+                case _:
+                    raise ValueError(f"Unknown segment_selection_method: {method!r}")
 
         selected_label: int = choiced_cluster[0]
         remained_metrics: set[str] = set(choiced_cluster[1])

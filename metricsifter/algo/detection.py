@@ -11,6 +11,67 @@ from ruptures.exceptions import BadSegmentationParameters
 
 NO_CHANGE_POINTS: Final[int] = -1
 
+#: Noise-scale (``sigma``) estimators supported by :func:`detect_univariate_changepoints`.
+SIGMA_ESTIMATORS: Final[frozenset[str]] = frozenset({"std", "mad", "diff_std"})
+
+#: Consistency constant that rescales the Median Absolute Deviation to the
+#: standard deviation of a Gaussian: ``sigma = MAD / Phi^{-1}(0.75) = 1.4826 * MAD``.
+_MAD_TO_SIGMA: Final[float] = 1.4826
+
+
+def _estimate_sigma(core: np.ndarray, sigma_estimator: str) -> float:
+    """Estimate the noise scale ``sigma`` used to derive the AIC/BIC penalty.
+
+    The penalty in :func:`detect_univariate_changepoints` scales with ``sigma**2``.
+    A ``sigma`` that is inflated by the very signal we want to detect makes the
+    penalty too large and yields **false negatives** (missed change points). The
+    three estimators trade off robustness against different sources of inflation:
+
+    * ``"std"`` -- ``np.nanstd`` of the series. The historical default and the
+      most efficient estimator for clean, stationary Gaussian noise. Its weakness
+      is that a trend, a level shift, or outliers all enlarge the global standard
+      deviation, so on contaminated series it over-penalizes and misses changes.
+    * ``"mad"`` -- ``1.4826 * median(|x - median(x)|)``. The Median Absolute
+      Deviation is robust to a *minority* of outliers or transient spikes (up to a
+      ~50% breakdown point): the median and its absolute deviations are unaffected
+      by a few extreme samples, so the penalty reflects the noise floor rather than
+      the contamination. Prefer it when the data contains sparse spikes/outliers.
+      It does **not** protect against a strong trend (which spreads the whole
+      distribution) -- use ``"diff_std"`` for that.
+    * ``"diff_std"`` -- ``nanstd(diff(x)) / sqrt(2)``. First differencing removes
+      any constant level and any linear trend (their contribution to the diff is a
+      constant, which carries no variance), so this estimates the noise scale
+      independently of trend and level shifts. For i.i.d. noise with variance
+      ``s**2`` we have ``Var(x_t - x_{t-1}) = 2*s**2``, hence the ``1/sqrt(2)``
+      rescaling. Prefer it when the series trends or contains large level shifts
+      that would otherwise inflate ``"std"``.
+
+    A robust estimate that degenerates to ``0`` (e.g. MAD when more than half of
+    the samples share one value, or ``diff_std`` on a staircase-flat series) would
+    zero the penalty and let the detector over-segment, so non-finite or zero
+    robust estimates fall back to ``np.nanstd``.
+
+    Returns ``float(sigma)``. Raises ``ValueError`` for an unknown estimator name.
+    """
+    match sigma_estimator:
+        case "std":
+            return float(np.nanstd(core))
+        case "mad":
+            median = np.nanmedian(core)
+            mad = np.nanmedian(np.abs(core - median))
+            sigma = float(_MAD_TO_SIGMA * mad)
+        case "diff_std":
+            if core.size < 2:
+                return float(np.nanstd(core))
+            sigma = float(np.nanstd(np.diff(core)) / np.sqrt(2.0))
+        case _:
+            raise ValueError(
+                f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
+            )
+    if not np.isfinite(sigma) or sigma == 0.0:
+        return float(np.nanstd(core))
+    return sigma
+
 
 def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
     """
@@ -30,7 +91,12 @@ def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
 
 
 def detect_univariate_changepoints(
-    x: np.ndarray, search_method: str, cost_model: str, penalty: str | float, penalty_adjust: float
+    x: np.ndarray,
+    search_method: str,
+    cost_model: str,
+    penalty: str | float,
+    penalty_adjust: float,
+    sigma_estimator: str = "std",
 ) -> list[int]:
     """Detect change points in a single metric, robust to missing values (NaN).
 
@@ -46,10 +112,14 @@ def detect_univariate_changepoints(
       (masking would require a per-element index table and is more error-prone).
       Linear interpolation is also a defensible imputation for monitoring
       metrics, where a value between two observations is approximately linear.
-    * The **penalty** is derived from ``np.nanstd`` of the interpolated core so
-      that residual NaN can never turn ``sigma`` (and therefore the penalty)
-      into ``NaN`` -- the previous ``np.std(x)`` produced ``NaN`` on any input
-      containing missing values and broke the ``predict(pen=...)`` call.
+    * The **penalty** is derived from the noise scale ``sigma`` of the
+      interpolated core (see :func:`_estimate_sigma`) so that residual NaN can
+      never turn ``sigma`` (and therefore the penalty) into ``NaN`` -- the
+      previous ``np.std(x)`` produced ``NaN`` on any input containing missing
+      values and broke the ``predict(pen=...)`` call. ``sigma_estimator``
+      selects how that scale is measured (``"std"`` / ``"mad"`` / ``"diff_std"``,
+      default ``"std"`` for backward compatibility); see :func:`_estimate_sigma`
+      for when to prefer each one.
     * Independently, the boundaries where a metric **goes missing** are treated
       as change points in their own right (see
       :func:`_detect_changepoints_with_missing_values`) and unioned with the
@@ -91,7 +161,7 @@ def detect_univariate_changepoints(
                 searcher = rpt.BottomUp(model=cost_model, jump=1)
             case _:
                 raise ValueError(f"search_method={search_method} is not supported.")
-    sigma = np.nanstd(core)
+    sigma = _estimate_sigma(core, sigma_estimator)
     match penalty:
         case "aic":
             pen = sigma * sigma
@@ -120,11 +190,12 @@ def detect_multi_changepoints(
     penalty: str | float,
     penalty_adjust: float,
     n_jobs: int = -1,
+    sigma_estimator: str = "std",
 ) -> tuple[list[int], dict[int, list[str]], dict[str, list[int]]]:
     metrics: list[str] = X.columns.tolist()
     multi_change_points = Parallel(n_jobs=n_jobs)(
         delayed(detect_univariate_changepoints)(
-            X[metric].to_numpy(), search_method, cost_model, penalty, penalty_adjust
+            X[metric].to_numpy(), search_method, cost_model, penalty, penalty_adjust, sigma_estimator
         )
         for metric in metrics
     )

@@ -19,6 +19,32 @@ class Segment:
     end_time: int
 
 
+@dataclass
+class SegmentCandidate:
+    """Lightweight view of one candidate segment, passed to a custom selection strategy.
+
+    A custom ``segment_selection_method`` is any
+    ``Callable[[SegmentCandidate], float]``: it receives one of these per
+    candidate segment and returns a score; :class:`metricsifter.sifter.Sifter`
+    keeps the segment with the maximum score (ties resolved by discovery order,
+    matching the built-in ``"max"`` / ``"weighted_max"`` strategies).
+
+    Attributes:
+        label: Segment ID (the KDE cluster label).
+        metrics: Metric names whose change points fall inside this segment.
+        change_points: Sorted row positions of the change points in this segment.
+        metric_to_cps: For each metric in ``metrics``, its full list of change
+            points across the whole series (not just this segment). Enables
+            weighting a metric by how "focused" its activity is, e.g. the built-in
+            ``"weighted_max"`` scores ``sum(1 / len(metric_to_cps[m]))``.
+    """
+
+    label: int
+    metrics: frozenset[str]
+    change_points: list[int]
+    metric_to_cps: dict[str, list[int]]
+
+
 @dataclass(frozen=True)
 class SegmentInfo:
     """Rich, diagnostic information about a single change-point cluster (segment).
