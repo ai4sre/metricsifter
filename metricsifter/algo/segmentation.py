@@ -31,6 +31,34 @@ def segment_nested_changepoints(
     return label_to_metrics, label_to_change_points
 
 
+def compute_kde_density(
+    change_points: list[int],
+    time_series_length: int,
+    kde_bandwidth: str | float = 2.5,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Evaluate the change-point KDE on the time axis (for visualization).
+
+    This mirrors the exact density computation performed inside
+    :func:`segment_changepoints_with_kde` so that plots can overlay the same
+    curve the segmentation logic reasons about. It is a pure, additive helper:
+    the internal segmentation flow is unchanged.
+
+    Returns ``(s, e)`` where ``s`` is the evaluation grid (row positions) and
+    ``e`` is the estimated density, or ``None`` when a density cannot be formed
+    (empty input or zero-variance change points, e.g. a single unique value).
+    """
+    if len(change_points) == 0:
+        return None
+    x = np.array(change_points, dtype=int)
+    if x.std() == 0.0:
+        return None
+    dens = KDEUnivariate(x)
+    dens.fit(kernel="gau", bw=kde_bandwidth, fft=True)
+    s = np.linspace(start=0, stop=time_series_length - 1, num=time_series_length)
+    e = dens.evaluate(s)
+    return s, e
+
+
 def segment_changepoints_with_kde(
     change_points: list[int],
     time_series_length: int,
@@ -41,8 +69,10 @@ def segment_changepoints_with_kde(
         raise ValueError("change_points should not be empty")
 
     x = np.array(change_points, dtype=int)
-    if x.std() == .0:  # Handling the case where there is bandwidth 0.
-        return np.zeros(len(x), dtype=int), {0: np.unique(x) if unique_values else x}  # the all change points belongs to cluster 0.
+    if x.std() == 0.0:  # Handling the case where there is bandwidth 0.
+        return np.zeros(len(x), dtype=int), {
+            0: np.unique(x) if unique_values else x
+        }  # the all change points belongs to cluster 0.
 
     dens = KDEUnivariate(x)
     dens.fit(kernel="gau", bw=kde_bandwidth, fft=True)

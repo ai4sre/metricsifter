@@ -1,6 +1,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from metricsifter.sifter import Sifter
+from metricsifter.transformer import SifterTransformer
 from metricsifter.types import Segment, SegmentInfo, SiftResult
 
 try:
@@ -8,4 +9,4 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
-__all__ = ["Sifter", "Segment", "SegmentInfo", "SiftResult", "__version__"]
+__all__ = ["Sifter", "SifterTransformer", "Segment", "SegmentInfo", "SiftResult", "__version__"]

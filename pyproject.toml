@@ -32,13 +32,21 @@ dependencies = [
 Homepage = "https://github.com/ai4sre/metricsifter"
 "Bug Tracker" = "https://github.com/ai4sre/metricsifter/issues"
 
+[project.scripts]
+metricsifter = "metricsifter.cli:main"
+
 [project.optional-dependencies]
+viz = [
+    "matplotlib>=3.7",
+]
 dev = [
     "black",
     "ruff",
     "coverage",
     "pytest",
     "setuptools",
+    "matplotlib>=3.7",
+    "scikit-learn>=1.5",
 ]
 experiments = [
     "pandas-stubs",
