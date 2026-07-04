@@ -135,6 +135,71 @@ expressed as wall-clock timestamps (`result.metric_to_change_times`,
 since positions are converted to times purely by index lookup. `run()` and
 `run_with_selected_segment()` are unchanged and fully backward compatible.
 
+## Algorithm Tuning
+
+Three optional knobs let you adapt the pipeline to your data. All are backward
+compatible: the defaults reproduce the original behavior exactly.
+
+**Robust penalty (`sigma_estimator`).** The change-point penalty scales with an
+estimate of the noise scale `sigma`. The default `"std"` uses the global standard
+deviation, which a strong trend, a large level shift, or outliers can inflate --
+making the penalty too strict and causing **missed** change points. Two robust
+alternatives fix this:
+
+- `"mad"` -- Median Absolute Deviation (`1.4826 * median(|x - median(x)|)`), robust
+  to a minority of spikes/outliers. Prefer it for spiky metrics.
+- `"diff_std"` -- standard deviation of the first difference divided by `sqrt(2)`,
+  which cancels any trend or level shift. Prefer it for trending metrics.
+
+```python
+# Estimate the noise floor from the first difference (trend-independent)
+sifter = Sifter(sigma_estimator="diff_std", n_jobs=1)
+sifted = sifter.run(data)
+```
+
+**KDE bandwidth auto-estimation (`bandwidth`).** Instead of the fixed default of
+`2.5`, pass `"scott"` or `"silverman"` to derive the bandwidth from the
+change-point distribution (via statsmodels). A float is still accepted; an invalid
+string raises `ValueError`.
+
+```python
+sifter = Sifter(bandwidth="scott", n_jobs=1)
+sifted = sifter.run(data)
+```
+
+**Custom segment-selection strategy (`segment_selection_method`).** Besides the
+built-in `"max"` / `"weighted_max"`, pass any `Callable[[SegmentCandidate], float]`;
+the segment with the highest score is selected. `SegmentCandidate` exposes
+`label`, `metrics`, `change_points`, and `metric_to_cps`.
+
+```python
+from metricsifter import SegmentCandidate
+
+def widest_segment(candidate: SegmentCandidate) -> float:
+    if not candidate.change_points:
+        return 0.0
+    return float(max(candidate.change_points) - min(candidate.change_points))
+
+result = Sifter(segment_selection_method=widest_segment, n_jobs=1).sift(data)
+```
+
+**Evaluating a selection (`evaluate_selection`).** A dependency-free helper to
+score the kept metrics against a known ground truth -- handy for tuning the knobs
+above or guarding against regressions in CI. Ratios with a zero denominator are
+defined as `0.0`.
+
+```python
+from metricsifter import evaluate_selection
+
+result = Sifter(n_jobs=1).sift(data)
+metrics = evaluate_selection(
+    selected=result.selected_metrics,
+    ground_truth={"failure_related_0", "failure_related_1", "failure_related_2"},
+    all_metrics=set(data.columns),  # optional: enables reduction_ratio
+)
+print(metrics.precision, metrics.recall, metrics.f1, metrics.reduction_ratio)
+```
+
 ## Visualization
 
 Plotting helpers live in `metricsifter.plot` and depend on **matplotlib**, which is an
