@@ -50,6 +50,9 @@ experiments = [
 [tool.setuptools.packages.find]
 include = ["metricsifter*"]
 
+[tool.setuptools.package-data]
+metricsifter = ["py.typed"]
+
 [tool.black]
 line-length = 120
 target-version = ["py310", "py311", "py312", "py313"]
