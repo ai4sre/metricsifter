@@ -135,6 +135,85 @@ expressed as wall-clock timestamps (`result.metric_to_change_times`,
 since positions are converted to times purely by index lookup. `run()` and
 `run_with_selected_segment()` are unchanged and fully backward compatible.
 
+## Visualization
+
+Plotting helpers live in `metricsifter.plot` and depend on **matplotlib**, which is an
+optional extra (install with `pip install 'metricsifter[viz]'`). Importing the module
+without matplotlib raises a clear error pointing at that command; the core install stays
+matplotlib-free.
+
+```python
+from metricsifter import Sifter
+from metricsifter import plot
+
+result = Sifter(penalty_adjust=2.0, n_jobs=1).sift(data=data)
+
+# Before/after time series on stacked panels, with change-point markers and the
+# selected-segment band. Returns a matplotlib Figure.
+fig = plot.plot_sifted_metrics(result, original_data=data)
+fig.savefig("sifted.png")
+
+# Change-point lag plot with segment boundaries and the internal KDE density curve.
+# Returns a matplotlib Axes.
+ax = plot.plot_change_point_density(result, time_series_length=len(data), kde_bandwidth=2.5)
+```
+
+## scikit-learn Pipeline
+
+`SifterTransformer` exposes the sift as a scikit-learn-style transformer **without adding a
+dependency on scikit-learn** (the estimator API is duck-typed). `fit` runs the sift and
+remembers the selected columns; `transform` returns those columns from any DataFrame with a
+matching schema (a missing column raises a clear `ValueError`).
+
+```python
+from metricsifter import SifterTransformer
+
+tr = SifterTransformer(penalty_adjust=2.0, n_jobs=1)
+reduced = tr.fit_transform(data)     # -> DataFrame of the selected metrics
+tr.selected_metrics_                  # columns chosen at fit time
+tr.result_                            # the full SiftResult from the fit
+
+# When scikit-learn is installed, it drops into a Pipeline and survives clone():
+from sklearn.pipeline import Pipeline
+pipe = Pipeline([("sift", SifterTransformer(penalty_adjust=2.0, n_jobs=1))])
+reduced = pipe.fit_transform(data)
+```
+
+## Prometheus
+
+`metricsifter.adapters.prometheus` converts a parsed Prometheus `query_range` response
+(`resultType == "matrix"`) into a wide DataFrame ready for `sift()`. It performs no HTTP:
+fetch the payload yourself and pass the parsed dict. Series with mismatched timestamps are
+outer-joined (missing samples become `NaN`, handled by the sift NaN support), and each column
+keeps a reverse mapping back to its original Prometheus labels.
+
+```python
+from metricsifter.adapters import prometheus
+
+# `response` is the parsed JSON of GET /api/v1/query_range
+df = prometheus.from_query_range(response)     # DatetimeIndex (UTC), one column per series
+labels = prometheus.to_metric_labels(df, df.columns[0])  # {"__name__": "...", "job": "...", ...}
+
+from metricsifter import Sifter
+result = Sifter(n_jobs=1).sift(df)
+```
+
+## CLI
+
+Installing the package provides a `metricsifter` command (stdlib `argparse` only):
+
+```bash
+# Read a CSV of time series, write the sifted metrics, and dump a diagnostic report.
+metricsifter run input.csv --output sifted.csv --report report.json \
+    --penalty-adjust 2.0 --bandwidth 2.5 --search-method pelt --n-jobs 1
+
+# With no --output, the sifted CSV is written to stdout.
+metricsifter run input.csv --index-col 0 --parse-dates
+```
+
+Exit codes: `0` on success, `2` on input errors (missing/empty/unparseable CSV, or bad
+arguments).
+
 ## Agent Integration
 
 [agent-metricsifter](https://github.com/ai4sre/agent-metricsifter) provides Claude Code Agent Skills that combine MetricSifter with [mcp-grafana](https://github.com/grafana/mcp-grafana) for interactive incident investigation. It enables automated Prometheus metrics filtering, Grafana dashboard creation, and human-in-the-loop parameter calibration.
