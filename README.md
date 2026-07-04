@@ -100,6 +100,41 @@ The example of original synthetic data and its sifted data is shown in the follo
 <img src="./docs/images/sifted_time_series.png" width="600" height="360">
 
 
+## Diagnostic Report
+
+`Sifter.run()` returns only the filtered metrics. When you need to know **why** each
+metric was kept or dropped (for debugging, calibration, or handing the result to an
+LLM agent), use `Sifter.sift()`, which returns a `SiftResult`:
+
+```python
+from metricsifter import Sifter
+
+result = Sifter(penalty_adjust=2.0, n_jobs=1).sift(data=data)
+
+# The filtered DataFrame (same as run())
+result.data
+
+# Why each metric was dropped (three mutually-exclusive reasons)
+result.filtered_no_change          # removed by the no-variation filter
+result.filtered_no_change_points   # no change point detected
+result.filtered_out_of_segment     # change point outside the densest segment
+result.selected_metrics            # metrics that were kept
+
+# Per-metric change points (row positions) and every candidate segment with its score
+result.metric_to_change_points     # {"failure_related_0": [60], ...}
+result.segments                    # list of SegmentInfo (label, metrics, index range, score)
+result.selected_segment            # the chosen densest segment
+
+# JSON serialization for LLM agents / MCP tools (the DataFrame is not included)
+print(result.to_json(indent=2))
+```
+
+If the input DataFrame has a `DatetimeIndex`, change points and segments are additionally
+expressed as wall-clock timestamps (`result.metric_to_change_times`,
+`SegmentInfo.start_time` / `end_time`). Irregular (non-uniform) sampling is supported,
+since positions are converted to times purely by index lookup. `run()` and
+`run_with_selected_segment()` are unchanged and fully backward compatible.
+
 ## Agent Integration
 
 [agent-metricsifter](https://github.com/ai4sre/agent-metricsifter) provides Claude Code Agent Skills that combine MetricSifter with [mcp-grafana](https://github.com/grafana/mcp-grafana) for interactive incident investigation. It enables automated Prometheus metrics filtering, Grafana dashboard creation, and human-in-the-loop parameter calibration.
