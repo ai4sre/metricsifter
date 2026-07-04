@@ -75,7 +75,8 @@ class Sifter:
         Returns:
             pd.DataFrame: DataFrame containing only the selected metrics
         """
-        return self.sift(data, without_simple_filter).data
+        result = self.sift(data, without_simple_filter)
+        return result.data if result.data is not None else pd.DataFrame()
 
     def run_with_selected_segment(
         self, data: pd.DataFrame, without_simple_filter: bool = False
@@ -99,7 +100,7 @@ class Sifter:
         if result.selected_segment is not None:
             s = result.selected_segment
             selected_segment = Segment(label=s.label, start_time=s.start_index, end_time=s.end_index)
-        return result.data, selected_segment
+        return (result.data if result.data is not None else pd.DataFrame()), selected_segment
 
     def sift(self, data: pd.DataFrame, without_simple_filter: bool = False) -> SiftResult:
         """Run the pipeline and return a diagnostic, explainable :class:`SiftResult`.
@@ -149,8 +150,10 @@ class Sifter:
             }
 
         if not flatten_change_points:
+            # Return a fully empty DataFrame (no index) to preserve the legacy
+            # behavior of run() / run_with_selected_segment().
             return SiftResult(
-                data=X[[]],
+                data=pd.DataFrame(),
                 selected_metrics=frozenset(),
                 filtered_no_change=filtered_no_change,
                 filtered_no_change_points=filtered_no_change_points,
