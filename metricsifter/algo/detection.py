@@ -46,6 +46,11 @@ def _estimate_sigma(core: np.ndarray, sigma_estimator: str) -> float:
       rescaling. Prefer it when the series trends or contains large level shifts
       that would otherwise inflate ``"std"``.
 
+    A robust estimate that degenerates to ``0`` (e.g. MAD when more than half of
+    the samples share one value, or ``diff_std`` on a staircase-flat series) would
+    zero the penalty and let the detector over-segment, so non-finite or zero
+    robust estimates fall back to ``np.nanstd``.
+
     Returns ``float(sigma)``. Raises ``ValueError`` for an unknown estimator name.
     """
     match sigma_estimator:
@@ -54,15 +59,18 @@ def _estimate_sigma(core: np.ndarray, sigma_estimator: str) -> float:
         case "mad":
             median = np.nanmedian(core)
             mad = np.nanmedian(np.abs(core - median))
-            return float(_MAD_TO_SIGMA * mad)
+            sigma = float(_MAD_TO_SIGMA * mad)
         case "diff_std":
             if core.size < 2:
                 return float(np.nanstd(core))
-            return float(np.nanstd(np.diff(core)) / np.sqrt(2.0))
+            sigma = float(np.nanstd(np.diff(core)) / np.sqrt(2.0))
         case _:
             raise ValueError(
                 f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
             )
+    if not np.isfinite(sigma) or sigma == 0.0:
+        return float(np.nanstd(core))
+    return sigma
 
 
 def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:

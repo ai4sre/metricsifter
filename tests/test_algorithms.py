@@ -78,6 +78,22 @@ class TestSigmaEstimator:
         assert _estimate_sigma(core, "mad") == pytest.approx(1.0, abs=0.05)
         assert _estimate_sigma(core, "diff_std") == pytest.approx(1.0, abs=0.05)
 
+    def test_degenerate_mad_falls_back_to_std(self):
+        """MAD is exactly 0 when >50% of samples share one value; the penalty must not become 0."""
+        # A constant baseline with sparse spikes: median-centered MAD is exactly 0.
+        x = np.full(100, 1.0)
+        x[[10, 40, 70]] = 8.0
+
+        assert _estimate_sigma(x, "mad") == pytest.approx(float(np.nanstd(x)))
+        # With the fallback the detector must not over-segment the baseline.
+        cps = detect_univariate_changepoints(x, "pelt", "l2", "bic", 2.0, sigma_estimator="mad")
+        assert len(cps) <= 6
+
+    def test_degenerate_diff_std_falls_back_to_std(self):
+        """An exact integer-step ramp has a constant diff (diff_std exactly 0); fall back to nanstd."""
+        x = np.arange(100, dtype=float)
+        assert _estimate_sigma(x, "diff_std") == pytest.approx(float(np.nanstd(x)))
+
     def test_invalid_estimator_raises_in_detect(self):
         x = np.concatenate([np.ones(50), np.ones(50) * 5.0])
         with pytest.raises(ValueError, match="sigma_estimator"):
