@@ -34,8 +34,24 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("input", help="Input CSV file of time series (columns are metrics).")
     run.add_argument("--output", "-o", default=None, help="Output CSV path for the sifted metrics (default: stdout).")
     run.add_argument("--report", default=None, help="Path to write the SiftResult diagnostic report as JSON.")
-    run.add_argument("--penalty-adjust", type=float, default=2.0, help="Penalty adjustment factor (default: 2.0).")
-    run.add_argument("--bandwidth", type=float, default=2.5, help="KDE bandwidth for segmentation (default: 2.5).")
+    run.add_argument(
+        "--penalty-adjust",
+        type=_penalty_adjust_value,
+        default=2.0,
+        help="Penalty adjustment factor (default: 2.0), or 'auto' for stability selection.",
+    )
+    run.add_argument(
+        "--bandwidth",
+        type=_bandwidth_value,
+        default=2.5,
+        help="KDE bandwidth for segmentation (default: 2.5); also accepts 'scott', 'silverman' or 'auto'.",
+    )
+    run.add_argument(
+        "--random-state",
+        type=int,
+        default=None,
+        help="Seed for the 'auto' bandwidth bootstrap (default: nondeterministic).",
+    )
     run.add_argument(
         "--search-method",
         default="pelt",
@@ -53,6 +69,24 @@ def _build_parser() -> argparse.ArgumentParser:
         "--parse-dates", action="store_true", help="Parse the index column (see --index-col) as datetimes."
     )
     return parser
+
+
+def _penalty_adjust_value(value: str) -> float | str:
+    if value == "auto":
+        return value
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a float or 'auto', got {value!r}")
+
+
+def _bandwidth_value(value: str) -> float | str:
+    if value in {"auto", "scott", "silverman"}:
+        return value
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a float, 'scott', 'silverman' or 'auto', got {value!r}")
 
 
 def _resolve_index_col(value: str) -> int | str | None:
@@ -88,6 +122,7 @@ def _run(args: argparse.Namespace) -> int:
         penalty_adjust=args.penalty_adjust,
         bandwidth=args.bandwidth,
         n_jobs=args.n_jobs,
+        random_state=args.random_state,
     )
     result = sifter.sift(data)
 

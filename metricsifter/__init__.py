@@ -3,7 +3,14 @@ from importlib.metadata import PackageNotFoundError, version
 from metricsifter.evaluation import SelectionMetrics, evaluate_selection
 from metricsifter.sifter import Sifter
 from metricsifter.transformer import SifterTransformer
-from metricsifter.types import Segment, SegmentCandidate, SegmentInfo, SiftResult
+from metricsifter.types import (
+    BandwidthTuning,
+    PenaltyTuning,
+    Segment,
+    SegmentCandidate,
+    SegmentInfo,
+    SiftResult,
+)
 
 try:
     __version__ = version("metricsifter")
@@ -17,6 +24,8 @@ __all__ = [
     "SegmentCandidate",
     "SegmentInfo",
     "SiftResult",
+    "PenaltyTuning",
+    "BandwidthTuning",
     "SelectionMetrics",
     "evaluate_selection",
     "__version__",
