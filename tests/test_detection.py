@@ -96,19 +96,25 @@ class TestDetectUnivariateChangepoints:
         # Small noise should result in few or no changepoints
         assert len(result) <= 1, "Should detect few or no changepoints"
 
-    @pytest.mark.skip(reason="Data with missing values may result in NaN standard deviation")
     def test_with_missing_values(self):
         """Should handle data with missing values"""
         # Add small noise to avoid zero standard deviation
-        x = np.concatenate([
-            np.ones(30) + np.random.randn(30) * 0.01,
-            np.array([np.nan] * 10),
-            np.ones(30) * 5 + np.random.randn(30) * 0.01,
-            np.array([np.nan] * 10),
-            np.ones(20) * 2 + np.random.randn(20) * 0.01
-        ])
+        np.random.seed(42)
+        x = np.concatenate(
+            [
+                np.ones(30) + np.random.randn(30) * 0.01,
+                np.array([np.nan] * 10),
+                np.ones(30) * 5 + np.random.randn(30) * 0.01,
+                np.array([np.nan] * 10),
+                np.ones(20) * 2 + np.random.randn(20) * 0.01,
+            ]
+        )
         result = detect_univariate_changepoints(x, "pelt", "l2", "bic", 2.0)
         assert len(result) > 0, "Should detect changepoints and missing value boundaries"
+        # Indices must be mapped back onto the original series (0 <= cp < len(x))
+        assert all(0 <= cp < len(x) for cp in result), "Change points must be original-space indices"
+        # The positions where the metric goes missing (index 30 and 70) are change points
+        assert 30 in result and 70 in result, "Missing-value boundaries should be reported"
 
     def test_different_penalty_aic(self):
         """Should work with AIC penalty"""
@@ -135,56 +141,72 @@ class TestDetectMultiChangepoints:
     def test_basic_multi_changepoint_detection(self):
         """Basic multi-metric changepoint detection"""
         np.random.seed(42)
-        data = pd.DataFrame({
-            'metric1': np.concatenate([np.ones(50), np.ones(50) * 5]),
-            'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
-            'metric3': np.ones(100) + np.random.randn(100) * 0.001,  # No changepoint (small noise)
-        })
-        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(
-            data, "pelt", "l2", "bic", 2.0, n_jobs=1
+        data = pd.DataFrame(
+            {
+                "metric1": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                "metric2": np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
+                "metric3": np.ones(100) + np.random.randn(100) * 0.001,  # No changepoint (small noise)
+            }
         )
+        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=1)
 
         # Should detect changepoints
         assert len(flatten_cps) > 0, "Should detect changepoints"
 
         # metric1 and metric2 should have changepoints
-        assert 'metric1' in metric_to_cps, "metric1 should have changepoints"
-        assert 'metric2' in metric_to_cps, "metric2 should have changepoints"
+        assert "metric1" in metric_to_cps, "metric1 should have changepoints"
+        assert "metric2" in metric_to_cps, "metric2 should have changepoints"
 
     def test_all_metrics_no_changepoints(self):
         """Should handle when all metrics have no changepoints"""
         np.random.seed(42)
-        data = pd.DataFrame({
-            'metric1': np.ones(100) + np.random.randn(100) * 0.001,
-            'metric2': np.ones(100) * 2 + np.random.randn(100) * 0.001,
-        })
-        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(
-            data, "pelt", "l2", "bic", 2.0, n_jobs=1
+        data = pd.DataFrame(
+            {
+                "metric1": np.ones(100) + np.random.randn(100) * 0.001,
+                "metric2": np.ones(100) * 2 + np.random.randn(100) * 0.001,
+            }
         )
+        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=1)
 
         # Small noise should result in few changepoints
         assert len(flatten_cps) <= 2, "Should detect few or no changepoints"
 
-    @pytest.mark.skip(reason="Parallel execution may cause permission errors depending on environment")
     def test_parallel_execution(self):
         """Test parallel execution"""
-        data = pd.DataFrame({
-            'metric1': np.concatenate([np.ones(50), np.ones(50) * 5]),
-            'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
-        })
-        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(
-            data, "pelt", "l2", "bic", 2.0, n_jobs=2
+        data = pd.DataFrame(
+            {
+                "metric1": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                "metric2": np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
+            }
         )
+        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=2)
 
         assert len(flatten_cps) > 0, "Should detect changepoints even with parallel execution"
         assert len(metric_to_cps) > 0, "Metric to changepoint mapping should exist"
 
+    def test_parallel_matches_sequential(self):
+        """detect_multi_changepoints must give identical results for n_jobs 1, 2 and -1"""
+        np.random.seed(42)
+        data = pd.DataFrame(
+            {
+                "metric1": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                "metric2": np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
+                "metric3": np.ones(100) + np.random.randn(100) * 0.001,
+                "metric4": np.concatenate([np.ones(30) * 3, np.ones(70) * 9]),
+            }
+        )
+        seq = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=1)
+        par2 = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=2)
+        par_all = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=-1)
+
+        # flatten_change_points, cp_to_metrics and metric_to_cps must all match exactly
+        assert seq == par2, "n_jobs=2 must equal n_jobs=1"
+        assert seq == par_all, "n_jobs=-1 must equal n_jobs=1"
+
     def test_empty_dataframe(self):
         """Should handle empty DataFrame"""
         data = pd.DataFrame()
-        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(
-            data, "pelt", "l2", "bic", 2.0, n_jobs=1
-        )
+        flatten_cps, cp_to_metrics, metric_to_cps = detect_multi_changepoints(data, "pelt", "l2", "bic", 2.0, n_jobs=1)
 
         assert len(flatten_cps) == 0
         assert len(metric_to_cps) == 0

@@ -9,10 +9,10 @@ import pytest
 
 from metricsifter.sifter import Sifter
 
-
 # ============================================================================
 # Error handling tests
 # ============================================================================
+
 
 class TestSifterErrorHandling:
     """Test error handling in Sifter class"""
@@ -31,7 +31,7 @@ class TestSifterErrorHandling:
 
     def test_single_row_dataframe(self):
         """Should handle single row DataFrame"""
-        single_row = pd.DataFrame({'metric1': [1.0], 'metric2': [2.0]})
+        single_row = pd.DataFrame({"metric1": [1.0], "metric2": [2.0]})
         sifter = Sifter(n_jobs=1)
 
         filtered_data = sifter.run(single_row)
@@ -40,10 +40,7 @@ class TestSifterErrorHandling:
 
     def test_two_row_dataframe(self):
         """Should handle two row DataFrame (minimum case for changepoint detection)"""
-        two_rows = pd.DataFrame({
-            'metric1': [1.0, 5.0],
-            'metric2': [2.0, 8.0]
-        })
+        two_rows = pd.DataFrame({"metric1": [1.0, 5.0], "metric2": [2.0, 8.0]})
         sifter = Sifter(n_jobs=1)
 
         # Changepoints may be detected with 2 rows
@@ -52,9 +49,7 @@ class TestSifterErrorHandling:
 
     def test_single_column_dataframe(self):
         """Should handle single column DataFrame"""
-        single_col = pd.DataFrame({
-            'metric1': [1.0, 1.0, 5.0, 5.0] * 20
-        })
+        single_col = pd.DataFrame({"metric1": [1.0, 1.0, 5.0, 5.0] * 20})
         sifter = Sifter(n_jobs=1)
 
         filtered_data = sifter.run(single_col)
@@ -62,36 +57,78 @@ class TestSifterErrorHandling:
 
     def test_all_nan_dataframe(self):
         """Should handle DataFrame with all NaN values"""
-        all_nan = pd.DataFrame({
-            'metric1': [float('nan')] * 100,
-            'metric2': [float('nan')] * 100
-        })
+        all_nan = pd.DataFrame({"metric1": [float("nan")] * 100, "metric2": [float("nan")] * 100})
         sifter = Sifter(n_jobs=1)
 
         filtered_data = sifter.run(all_nan)
         # All NaN values should be filtered out
         assert filtered_data.empty
 
-    @pytest.mark.skip(reason="Data with missing values may result in NaN standard deviation")
     def test_mixed_nan_dataframe(self):
         """Should handle DataFrame with some NaN values"""
-        mixed_nan = pd.DataFrame({
-            'metric1': [1.0, 2.0, np.nan, np.nan, 5.0, 6.0] * 10,
-            'metric2': [2.0, 4.0, 6.0, 8.0, 10.0, 12.0] * 10
-        })
+        mixed_nan = pd.DataFrame(
+            {"metric1": [1.0, 2.0, np.nan, np.nan, 5.0, 6.0] * 10, "metric2": [2.0, 4.0, 6.0, 8.0, 10.0, 12.0] * 10}
+        )
         sifter = Sifter(n_jobs=1)
 
         filtered_data = sifter.run(mixed_nan)
         # NaN boundaries may be detected as changepoints
         assert isinstance(filtered_data, pd.DataFrame)
 
+    def test_mixed_nan_classified_correctly(self):
+        """A metric that is no-variation except for NaN must be classified as no_change."""
+        data = pd.DataFrame(
+            {
+                # Clear change point -> kept
+                "signal": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                # Constant value with an interior NaN gap: no variation -> no_change filter
+                "flat_with_nan": np.concatenate([np.full(40, 3.0), [np.nan] * 20, np.full(40, 3.0)]),
+                # Entirely NaN -> no_change filter
+                "all_nan": np.full(100, np.nan),
+            }
+        )
+        result = Sifter(n_jobs=1).sift(data)
+
+        assert "flat_with_nan" in result.filtered_no_change
+        assert "all_nan" in result.filtered_no_change
+        assert "signal" in result.selected_metrics
+        # Exclusion buckets must stay mutually exclusive
+        assert result.filtered_no_change.isdisjoint(result.filtered_no_change_points)
+
+
+class TestFilterNoChangesParallel:
+    """_filter_no_changes must be independent of n_jobs."""
+
+    def test_parallel_matches_sequential(self):
+        np.random.seed(42)
+        data = pd.DataFrame(
+            {
+                "change": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                "constant": np.full(100, 7.0),
+                "zeros": np.zeros(100),
+                "all_nan": np.full(100, np.nan),
+                "mixed_nan": [1.0, 2.0, np.nan, np.nan] * 25,
+                "noisy": np.ones(100) + np.random.randn(100) * 0.5,
+            }
+        )
+        seq = Sifter._filter_no_changes(data, n_jobs=1)
+        par2 = Sifter._filter_no_changes(data, n_jobs=2)
+        par_all = Sifter._filter_no_changes(data, n_jobs=-1)
+
+        assert list(seq.columns) == list(par2.columns)
+        assert list(seq.columns) == list(par_all.columns)
+        pd.testing.assert_frame_equal(seq, par2)
+        pd.testing.assert_frame_equal(seq, par_all)
+
     def test_invalid_segment_selection_method(self):
         """Should raise error for invalid segment_selection_method"""
         # Generate data with clear changepoints
-        data = pd.DataFrame({
-            'metric1': np.concatenate([np.ones(50), np.ones(50) * 10]),
-            'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 20])
-        })
+        data = pd.DataFrame(
+            {
+                "metric1": np.concatenate([np.ones(50), np.ones(50) * 10]),
+                "metric2": np.concatenate([np.ones(50) * 2, np.ones(50) * 20]),
+            }
+        )
 
         sifter = Sifter(segment_selection_method="invalid_method", n_jobs=1)
 
@@ -103,6 +140,7 @@ class TestSifterErrorHandling:
 # Parameter variation tests
 # ============================================================================
 
+
 class TestSifterParameterVariations:
     """Test different parameter combinations for Sifter"""
 
@@ -110,11 +148,13 @@ class TestSifterParameterVariations:
     def sample_data(self) -> pd.DataFrame:
         """Generate sample data for testing"""
         np.random.seed(42)
-        return pd.DataFrame({
-            'metric1': np.concatenate([np.ones(50), np.ones(50) * 5]),
-            'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
-            'metric3': np.ones(100) + np.random.randn(100) * 0.001,  # No changepoint (small noise)
-        })
+        return pd.DataFrame(
+            {
+                "metric1": np.concatenate([np.ones(50), np.ones(50) * 5]),
+                "metric2": np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
+                "metric3": np.ones(100) + np.random.randn(100) * 0.001,  # No changepoint (small noise)
+            }
+        )
 
     def test_different_search_methods(self, sample_data):
         """Should work with different search methods"""
@@ -198,14 +238,13 @@ class TestSifterParameterVariations:
 # Edge case tests
 # ============================================================================
 
+
 class TestSifterEdgeCases:
     """Test edge cases for Sifter"""
 
     def test_very_large_penalty_adjust(self):
         """Should handle very large penalty_adjust"""
-        data = pd.DataFrame({
-            'metric1': [1.0, 1.0, 5.0, 5.0] * 20
-        })
+        data = pd.DataFrame({"metric1": [1.0, 1.0, 5.0, 5.0] * 20})
         sifter = Sifter(penalty_adjust=100.0, n_jobs=1)
 
         filtered_data = sifter.run(data)
@@ -214,9 +253,7 @@ class TestSifterEdgeCases:
 
     def test_very_small_penalty_adjust(self):
         """Should handle very small penalty_adjust"""
-        data = pd.DataFrame({
-            'metric1': [1.0, 1.0, 5.0, 5.0] * 20
-        })
+        data = pd.DataFrame({"metric1": [1.0, 1.0, 5.0, 5.0] * 20})
         sifter = Sifter(penalty_adjust=0.1, n_jobs=1)
 
         filtered_data = sifter.run(data)
@@ -236,48 +273,40 @@ class TestSifterEdgeCases:
         """Should work with segment_selection_method='max'"""
         sifter = Sifter(segment_selection_method="max", n_jobs=1)
 
-        cluster_label_to_metrics = {
-            0: {'metric1', 'metric2'},
-            1: {'metric3', 'metric4', 'metric5'},
-            2: {'metric6'}
-        }
+        cluster_label_to_metrics = {0: {"metric1", "metric2"}, 1: {"metric3", "metric4", "metric5"}, 2: {"metric6"}}
 
         metric_to_cps = {
-            'metric1': [10, 20],
-            'metric2': [10],
-            'metric3': [50, 60],
-            'metric4': [50],
-            'metric5': [55],
-            'metric6': [80]
+            "metric1": [10, 20],
+            "metric2": [10],
+            "metric3": [50, 60],
+            "metric4": [50],
+            "metric5": [55],
+            "metric6": [80],
         }
 
-        label, metrics = sifter.select_largest_segment_with_label(
-            cluster_label_to_metrics, metric_to_cps
-        )
+        label, metrics = sifter.select_largest_segment_with_label(cluster_label_to_metrics, metric_to_cps)
 
         # Label 1 has the most metrics
         assert label == 1
-        assert metrics == {'metric3', 'metric4', 'metric5'}
+        assert metrics == {"metric3", "metric4", "metric5"}
 
     def test_select_largest_segment_weighted_max_method(self):
         """Should work with segment_selection_method='weighted_max'"""
         sifter = Sifter(segment_selection_method="weighted_max", n_jobs=1)
 
         cluster_label_to_metrics = {
-            0: {'metric1', 'metric2'},  # metric1: 1/2, metric2: 1/1 -> total 1.5
-            1: {'metric3'},              # metric3: 1/1 -> total 1.0
+            0: {"metric1", "metric2"},  # metric1: 1/2, metric2: 1/1 -> total 1.5
+            1: {"metric3"},  # metric3: 1/1 -> total 1.0
         }
 
         metric_to_cps = {
-            'metric1': [10, 20],  # 2 changepoints
-            'metric2': [10],       # 1 changepoint
-            'metric3': [50],       # 1 changepoint
+            "metric1": [10, 20],  # 2 changepoints
+            "metric2": [10],  # 1 changepoint
+            "metric3": [50],  # 1 changepoint
         }
 
-        label, metrics = sifter.select_largest_segment_with_label(
-            cluster_label_to_metrics, metric_to_cps
-        )
+        label, metrics = sifter.select_largest_segment_with_label(cluster_label_to_metrics, metric_to_cps)
 
         # Label 0 has larger weighted sum
         assert label == 0
-        assert metrics == {'metric1', 'metric2'}
+        assert metrics == {"metric1", "metric2"}
