@@ -95,18 +95,31 @@ class TestParams:
         assert sifter_args <= tr_params
 
 
+def _import_sklearn_or_skip(module: str):
+    """importorskip that also tolerates binary-incompatibility failures.
+
+    On CI for Python 3.10/3.11 the PyRCA install changes the numpy version
+    underneath the prebuilt scikit-learn wheel, which then fails to import
+    with ValueError ("numpy.dtype size changed") rather than ImportError.
+    """
+    try:
+        return pytest.importorskip(module)
+    except Exception as exc:  # pragma: no cover - environment dependent
+        pytest.skip(f"scikit-learn unusable in this environment: {exc}")
+
+
 class TestSklearnIntegration:
-    """Only runs when scikit-learn is installed."""
+    """Only runs when scikit-learn is installed and importable."""
 
     def test_clone_roundtrip(self):
-        sklearn_base = pytest.importorskip("sklearn.base")
+        sklearn_base = _import_sklearn_or_skip("sklearn.base")
         tr = SifterTransformer(penalty_adjust=4.0, bandwidth=1.5, n_jobs=1)
         cloned = sklearn_base.clone(tr)
         assert cloned.get_params() == tr.get_params()
         assert cloned is not tr
 
     def test_pipeline_fit_transform(self):
-        pipeline_mod = pytest.importorskip("sklearn.pipeline")
+        pipeline_mod = _import_sklearn_or_skip("sklearn.pipeline")
         data = make_synthetic()
         pipe = pipeline_mod.Pipeline([("sift", SifterTransformer(penalty_adjust=2.0, n_jobs=1))])
         out = pipe.fit_transform(data)
