@@ -109,6 +109,7 @@ class TestSifterParameterVariations:
     @pytest.fixture
     def sample_data(self) -> pd.DataFrame:
         """Generate sample data for testing"""
+        np.random.seed(42)
         return pd.DataFrame({
             'metric1': np.concatenate([np.ones(50), np.ones(50) * 5]),
             'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),

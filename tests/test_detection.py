@@ -90,6 +90,7 @@ class TestDetectUnivariateChangepoints:
     def test_no_changepoint(self):
         """Should handle data with no changepoints (with small noise)"""
         # Add small noise to avoid zero standard deviation which causes zero penalty
+        np.random.seed(42)
         x = np.ones(100) + np.random.randn(100) * 0.001
         result = detect_univariate_changepoints(x, "pelt", "l2", "bic", 2.0)
         # Small noise should result in few or no changepoints
@@ -133,6 +134,7 @@ class TestDetectMultiChangepoints:
 
     def test_basic_multi_changepoint_detection(self):
         """Basic multi-metric changepoint detection"""
+        np.random.seed(42)
         data = pd.DataFrame({
             'metric1': np.concatenate([np.ones(50), np.ones(50) * 5]),
             'metric2': np.concatenate([np.ones(50) * 2, np.ones(50) * 8]),
@@ -151,6 +153,7 @@ class TestDetectMultiChangepoints:
 
     def test_all_metrics_no_changepoints(self):
         """Should handle when all metrics have no changepoints"""
+        np.random.seed(42)
         data = pd.DataFrame({
             'metric1': np.ones(100) + np.random.randn(100) * 0.001,
             'metric2': np.ones(100) * 2 + np.random.randn(100) * 0.001,
