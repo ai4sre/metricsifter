@@ -96,6 +96,13 @@ class TestDetectUnivariateChangepoints:
         # Small noise should result in few or no changepoints
         assert len(result) <= 1, "Should detect few or no changepoints"
 
+    def test_short_core_after_nan_trim(self):
+        """A 2-3 sample core after NaN trimming must not crash the detector"""
+        x = np.array([np.nan, 1.0, 2.0, 3.0, np.nan])
+        result = detect_univariate_changepoints(x, "pelt", "l2", "bic", 2.0)
+        # Only the NaN boundaries remain (leading NaN start and value -> NaN transition)
+        assert result == [0, 4]
+
     def test_with_missing_values(self):
         """Should handle data with missing values"""
         # Add small noise to avoid zero standard deviation

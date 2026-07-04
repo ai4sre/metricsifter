@@ -7,6 +7,7 @@ import numpy.typing as npt
 import pandas as pd
 import ruptures as rpt
 from joblib import Parallel, delayed
+from ruptures.exceptions import BadSegmentationParameters
 
 NO_CHANGE_POINTS: Final[int] = -1
 
@@ -98,7 +99,12 @@ def detect_univariate_changepoints(
             pen = np.log(core.size) * sigma * sigma
         case _:
             pen = float(penalty)
-    cps = searcher.fit(core).predict(pen=pen * penalty_adjust)
+    try:
+        cps = searcher.fit(core).predict(pen=pen * penalty_adjust)
+    except BadSegmentationParameters:
+        # The core is too short for the detector to place any break (e.g. a
+        # 2-3 sample series after NaN trimming); only NaN boundaries remain.
+        return sorted(missing_value_cps)
     if cps is None:
         raise ValueError("Change point detection failed: predict() returned None.")
     cps = cps[:-1]  # remove the last index (== series length)
