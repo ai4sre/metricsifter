@@ -37,7 +37,8 @@ def segment_changepoints_with_kde(
     kde_bandwidth: str | float,
     unique_values: bool = True,
 ) -> tuple[np.ndarray, dict[int, npt.NDArray]]:
-    assert len(change_points) > 0, "change_points should not be empty"
+    if len(change_points) == 0:
+        raise ValueError("change_points should not be empty")
 
     x = np.array(change_points, dtype=int)
     if x.std() == .0:  # Handling the case where there is bandwidth 0.

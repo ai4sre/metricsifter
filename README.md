@@ -63,19 +63,32 @@ pip install git+https://github.com/salesforce/PyRCA@d85512b
 ## Getting Started
 
 ```python
-from metricsifter.sifter import Sifter
-from tests.sample_gen.generator import generate_synthetic_data
+import numpy as np
+import pandas as pd
 
-## Create time series data
-normal_data, abonormal_data, _, _, anomalous_nodes = generate_synthetic_data(num_node=20, num_edge=20, num_normal_samples=55, num_abnormal_samples=15, anomaly_type=0)
-data = pd.concat([normal_data, abonormal_data], axis=0, ignore_index=True)
+from metricsifter import Sifter
 
-## Remove the variables of time series data
+## Create synthetic time series data:
+## - 3 failure-related metrics with a level shift around t=60
+## - 1 unrelated metric with a level shift at a different time (t=20)
+## - 6 flat (no-change) metrics
+rng = np.random.default_rng(0)
+length = 80
+data = {}
+for i in range(3):
+    data[f"failure_related_{i}"] = np.concatenate(
+        [rng.normal(0, 0.1, 60), rng.normal(5, 0.1, 20)]
+    )
+data["unrelated"] = np.concatenate([rng.normal(0, 0.1, 20), rng.normal(3, 0.1, 60)])
+for i in range(6):
+    data[f"flat_{i}"] = np.full(length, float(i))
+data = pd.DataFrame(data)
+
+## Remove the metrics unrelated to the failure
 sifter = Sifter(penalty_adjust=2.0, n_jobs=1)
 sifted_data = sifter.run(data=data)
-print("(#removed metrics) / (#total metrics):", len(set(data.columns) - set(siftered_data.columns)), "/", len(data.columns))
-print("difference between prediction and ground truth:", set(siftered_data.columns) - anomalous_nodes)
-assert set(sifted_data.columns) - anomalous_nodes == set()
+print("(#removed metrics) / (#total metrics):", len(set(data.columns) - set(sifted_data.columns)), "/", len(data.columns))
+print("remained metrics:", list(sifted_data.columns))
 ```
 
 The example of original synthetic data and its sifted data is shown in the following figure.

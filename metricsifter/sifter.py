@@ -5,6 +5,7 @@ import pandas as pd
 
 from metricsifter import utils
 from metricsifter.algo import detection, segmentation
+from metricsifter.types import Segment
 
 
 class Sifter:
@@ -81,7 +82,7 @@ class Sifter:
         self,
         data: pd.DataFrame,
         without_simple_filter: bool = False
-    ) -> tuple[pd.DataFrame, "Segment | None"]:
+    ) -> tuple[pd.DataFrame, Segment | None]:
         """Extract anomalous metrics from time series data and return information about the selected segment
 
         Args:
@@ -127,7 +128,6 @@ class Sifter:
         if selected_label is not None and selected_label in label_to_change_points:
             change_points = label_to_change_points[selected_label]
             if len(change_points) > 0:
-                from metricsifter.types import Segment
                 selected_segment = Segment(
                     label=selected_label,
                     start_time=int(change_points.min()),
@@ -179,7 +179,8 @@ class Sifter:
             case "max" | "":
                 choiced_cluster = max(cluster_label_to_metrics.items(), key=lambda x: len(x[1]))
             case "weighted_max":
-                assert metric_to_cps is not None, "metric_to_cps should not be None"
+                if metric_to_cps is None:
+                    raise ValueError("metric_to_cps should not be None")
                 choiced_cluster = max(
                     cluster_label_to_metrics.items(), key=lambda x: sum(1 / len(metric_to_cps[m]) for m in x[1])
                 )

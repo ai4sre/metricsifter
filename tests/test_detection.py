@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from metricsifter.algo.detection import (
-    NO_CHANGE_POINTS,
     _detect_changepoints_with_missing_values,
     detect_multi_changepoints,
     detect_univariate_changepoints,
@@ -125,7 +124,7 @@ class TestDetectUnivariateChangepoints:
     def test_invalid_search_method(self):
         """Should raise error for invalid search method"""
         x = np.ones(100)
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match="search_method"):
             detect_univariate_changepoints(x, "invalid_method", "l2", "bic", 2.0)
 
 

@@ -97,9 +97,9 @@ class TestSegmentChangepointsWithKDE:
         # Larger bandwidth tends to produce fewer clusters
         assert len(label_to_cps_large) <= len(label_to_cps_small) or len(label_to_cps_large) == len(label_to_cps_small)
 
-    def test_empty_changepoints_raises_assertion(self):
-        """Should raise AssertionError for empty changepoints list"""
-        with pytest.raises(AssertionError):
+    def test_empty_changepoints_raises_value_error(self):
+        """Should raise ValueError for empty changepoints list"""
+        with pytest.raises(ValueError, match="change_points should not be empty"):
             segment_changepoints_with_kde([], time_series_length=100, kde_bandwidth=2.5)
 
 

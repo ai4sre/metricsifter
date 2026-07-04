@@ -39,7 +39,7 @@ def detect_univariate_changepoints(x: np.ndarray, search_method: str, cost_model
             case "bottomup":
                 searcher = rpt.BottomUp(model=cost_model, jump=1)
             case _:
-                assert False, f"search_method={search_method} is not supported."
+                raise ValueError(f"search_method={search_method} is not supported.")
     sigma = np.std(x)
     match penalty:
         case "aic":
@@ -49,7 +49,8 @@ def detect_univariate_changepoints(x: np.ndarray, search_method: str, cost_model
         case _:
             pen = float(penalty)
     cps = searcher.fit(x).predict(pen=pen * penalty_adjust)
-    assert cps is not None, "cps should not be None"
+    if cps is None:
+        raise ValueError("Change point detection failed: predict() returned None.")
     cps = cps[:-1]  # remove the last index
     mvs = _detect_changepoints_with_missing_values(x)
     return sorted(list(set(cps) | set(mvs)))
