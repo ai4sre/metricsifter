@@ -128,6 +128,25 @@ class TestParallelApply:
         pd.testing.assert_series_equal(result_single, result_parallel)
         pd.testing.assert_series_equal(result_single, result_all)
 
+    def test_dataframe_returning_func_matches_serial(self):
+        """Element-wise funcs (column -> same-length Series) must match df.apply()"""
+        df = pd.DataFrame(
+            {
+                "A": [1, 2, 3, 4, 5],
+                "B": [2, 4, 6, 8, 10],
+                "C": [3, 6, 9, 12, 15],
+                "D": [4, 8, 12, 16, 20],
+                "E": [5, 10, 15, 20, 25],
+            }
+        )
+
+        def func(x):
+            return x * 2
+
+        expected = df.apply(func)
+        pd.testing.assert_frame_equal(parallel_apply(df, func, n_jobs=2), expected)
+        pd.testing.assert_frame_equal(parallel_apply(df, func, n_jobs=-1), expected)
+
     def test_with_custom_function(self):
         """Should work with custom function"""
         df = pd.DataFrame({"A": [1, 2, 3], "B": [4, 5, 6]})

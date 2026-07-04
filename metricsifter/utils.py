@@ -34,10 +34,17 @@ def parallel_apply(df: pd.DataFrame, func: Callable, n_jobs: int = -1, **kwargs:
     parallelism.
     """
 
-    if effective_n_jobs(n_jobs) == 1 or df.shape[1] == 0:
+    if effective_n_jobs(n_jobs) == 1 or df.shape[1] == 0 or df.shape[0] == 0:
         return df.apply(func, **kwargs)
     ret = Parallel(n_jobs=n_jobs)(
         delayed(type(df).apply)(df.iloc[:, s], func, **kwargs)
         for s in gen_even_slices(df.shape[1], effective_n_jobs(n_jobs))
     )
-    return pd.concat([r for r in ret if not r.empty])
+    results = [r for r in ret if not r.empty]
+    if not results:
+        return df.apply(func, **kwargs)
+    if isinstance(results[0], pd.DataFrame):
+        # func mapped each column to a same-length Series, so each worker
+        # returns a column-subset DataFrame: stitch them back side by side.
+        return pd.concat(results, axis=1)
+    return pd.concat(results)
