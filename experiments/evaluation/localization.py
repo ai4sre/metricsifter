@@ -3,12 +3,12 @@ import pandas as pd
 
 
 def ac_k(X: pd.Series) -> pd.Series:
-    k_values = list(range(1, X["k"].max()+1))
-    acc_at_k = {k: .0 for k in k_values}
+    k_values = list(range(1, X["k"].max() + 1))
+    acc_at_k = {k: 0.0 for k in k_values}
     num_anomalies: int = X["trial_no"].max()
 
     for k in k_values:
-        for i in range(1, num_anomalies+1):
+        for i in range(1, num_anomalies + 1):
             x = X.loc[X["trial_no"] == i]
             num_root_causes = x["num_root_causes"].max()  # assume the same for all trials
             num_hit = x.loc[x["k"] <= k]["hit"].sum()
@@ -30,7 +30,8 @@ def score(row: pd.Series) -> pd.Series:
     avgrec = avg_k(row)
     return pd.Series(
         {
-            "ac@5": rec.get(5, .0), "avg@5": avgrec.get(5, .0),
+            "ac@5": rec.get(5, 0.0),
+            "avg@5": avgrec.get(5, 0.0),
             "elapsed_time_sum": row["elapsed_time_sum"].mean(),
             "elapsed_time_red": row["elapsed_time_red"].mean(),
             "elapsed_time_loc": row["elapsed_time_loc"].mean(),
@@ -43,12 +44,14 @@ def score(row: pd.Series) -> pd.Series:
 
 def rs_score(row: pd.Series) -> pd.Series:
     rs_score = get_scores_of_random_selection(
-        num_metrics=row["num_remained"].to_numpy(), num_found_metrics=(row["num_root_causes"]*row["root_cause_recall"]).to_numpy(),
+        num_metrics=row["num_remained"].to_numpy(),
+        num_found_metrics=(row["num_root_causes"] * row["root_cause_recall"]).to_numpy(),
         max_k=row["k"].max(),
     )
     return pd.Series(
         {
-            "ac@5": rs_score.get("AC_5", .0), "avg@5": rs_score.get("AVG_5", .0),
+            "ac@5": rs_score.get("AC_5", 0.0),
+            "avg@5": rs_score.get("AVG_5", 0.0),
             "elapsed_time_sum": row["elapsed_time_sum"].mean(),
             "elapsed_time_red": row["elapsed_time_red"].mean(),
             "elapsed_time_loc": row["elapsed_time_loc"].mean(),
@@ -58,8 +61,11 @@ def rs_score(row: pd.Series) -> pd.Series:
         },
     )
 
+
 def get_scores_of_random_selection(
-    num_metrics: npt.NDArray, num_found_metrics: npt.NDArray, max_k: int = 5,
+    num_metrics: npt.NDArray,
+    num_found_metrics: npt.NDArray,
+    max_k: int = 5,
     lower_case: bool = False,
 ) -> dict[str, float]:
 

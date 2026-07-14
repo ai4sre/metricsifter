@@ -22,7 +22,6 @@ def set_bidirected_edge(G: nx.DiGraph, u: str, v: str) -> None:
     G.add_edge(v, u)
 
 
-
 def get_forbits(metrics: set[str], pk: PriorKnowledge) -> list[tuple[str, str]]:
     init_g: nx.Graph = prepare_init_graph(metrics, pk)
     init_dg = fix_edge_directions_in_causal_graph(init_g, pk)
@@ -51,9 +50,7 @@ def prepare_init_graph(
     return init_g
 
 
-def build_subgraph_of_removal_edges(
-    metrics: set[str], pk: PriorKnowledge
-) -> nx.Graph:
+def build_subgraph_of_removal_edges(metrics: set[str], pk: PriorKnowledge) -> nx.Graph:
     """Build a subgraph consisting of removal edges with prior knowledges."""
     ctnr_graph: nx.Graph = pk.get_container_call_digraph().to_undirected()
     service_graph: nx.Graph = pk.get_service_call_digraph().to_undirected()
@@ -64,9 +61,7 @@ def build_subgraph_of_removal_edges(
         u_comp = parse_metric(u)[0]
         v_comp = parse_metric(v)[0]
         # "container" and "middleware" is the same.
-        if (is_container_metric(u) or is_middleware_metric(u)) and (
-            is_container_metric(v) or is_middleware_metric(v)
-        ):
+        if (is_container_metric(u) or is_middleware_metric(u)) and (is_container_metric(v) or is_middleware_metric(v)):
             if u_comp == v_comp or ctnr_graph.has_edge(u_comp, v_comp):
                 continue
         elif (is_container_metric(u) or is_middleware_metric(u)) and is_service_metric(v):
@@ -114,9 +109,7 @@ def build_subgraph_of_removal_edges(
     return G
 
 
-def fix_edge_direction_based_hieralchy(
-    G: nx.DiGraph, u: str, v: str, pk: PriorKnowledge
-) -> None:
+def fix_edge_direction_based_hieralchy(G: nx.DiGraph, u: str, v: str, pk: PriorKnowledge) -> None:
     u_comp, v_comp = parse_metric(u)[0], parse_metric(v)[0]
     # Force direction from (container -> service) to (service -> container) in same service
     if is_service_metric(u) and is_container_metric(v):
@@ -127,7 +120,9 @@ def fix_edge_direction_based_hieralchy(
 
 
 def fix_edge_direction_based_network_call(
-    G: nx.DiGraph, u: str, v: str,
+    G: nx.DiGraph,
+    u: str,
+    v: str,
     service_dep_graph: nx.DiGraph,
     container_dep_graph: nx.DiGraph,
     pk: PriorKnowledge,
@@ -139,9 +134,7 @@ def fix_edge_direction_based_network_call(
         # If u and v is in the same service, force bi-directed edge.
         if u_comp == v_comp:
             set_bidirected_edge(G, u, v)
-        elif (v_comp not in service_dep_graph[u_comp]) and (
-            u_comp in service_dep_graph[v_comp]
-        ):
+        elif (v_comp not in service_dep_graph[u_comp]) and (u_comp in service_dep_graph[v_comp]):
             reverse_edge_direction(G, u, v)
 
     # From container to container
@@ -149,25 +142,19 @@ def fix_edge_direction_based_network_call(
         # If u and v is in the same container, force bi-directed edge.
         if u_comp == v_comp:
             set_bidirected_edge(G, u, v)
-        elif (v_comp not in container_dep_graph[u_comp]) and (
-            u_comp in container_dep_graph[v_comp]
-        ):
+        elif (v_comp not in container_dep_graph[u_comp]) and (u_comp in container_dep_graph[v_comp]):
             reverse_edge_direction(G, u, v)
 
     # From service to container
     if is_service_metric(u) and (is_container_metric(v) or is_middleware_metric(v)):
         v_service = pk.get_service_by_container(v_comp)
-        if (v_service not in service_dep_graph[u_comp]) and (
-            u_comp in service_dep_graph[v_service]
-        ):
+        if (v_service not in service_dep_graph[u_comp]) and (u_comp in service_dep_graph[v_service]):
             reverse_edge_direction(G, u, v)
 
     # From container to service
     if (is_container_metric(u) or is_middleware_metric(u)) and is_service_metric(v):
         u_service = pk.get_service_by_container(u_comp)
-        if (v_comp not in service_dep_graph[u_service]) and (
-            u_service in service_dep_graph[v_comp]
-        ):
+        if (v_comp not in service_dep_graph[u_service]) and (u_service in service_dep_graph[v_comp]):
             reverse_edge_direction(G, u, v)
 
 
@@ -185,13 +172,9 @@ def fix_edge_directions_in_causal_graph(
     container_dep_graph: nx.DiGraph = pk.get_container_call_digraph().reverse()
     # Traverse the all edges of G via the neighbors
     for u, nbrsdict in G.adjacency():
-        nbrs = list(
-            nbrsdict.keys()
-        )  # to avoid 'RuntimeError: dictionary changed size during iteration'
+        nbrs = list(nbrsdict.keys())  # to avoid 'RuntimeError: dictionary changed size during iteration'
         for v in nbrs:
             # u -> v
             fix_edge_direction_based_hieralchy(G, u, v, pk)
-            fix_edge_direction_based_network_call(
-                G, u, v, service_dep_graph, container_dep_graph, pk
-            )
+            fix_edge_direction_based_network_call(G, u, v, service_dep_graph, container_dep_graph, pk)
     return G

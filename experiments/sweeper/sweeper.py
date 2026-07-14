@@ -68,29 +68,17 @@ def _run_reduction_on_empirical(method: str, data_param: dict, data_body: dict) 
     pk: PriorKnowledge
     match data_param["dataset_name"].split("-"):
         case ["ss", "small"]:
-            pk = SockShopKnowledge(
-                target_metric_types=MEDIUM_TARGET_METRIC_TYPES
-            )
+            pk = SockShopKnowledge(target_metric_types=MEDIUM_TARGET_METRIC_TYPES)
         case ["ss", "medium"]:
-            pk = SockShopKnowledge(
-                target_metric_types=MEDIUM_TARGET_METRIC_TYPES
-            )
+            pk = SockShopKnowledge(target_metric_types=MEDIUM_TARGET_METRIC_TYPES)
         case ["ss", "large"]:
-            pk = SockShopKnowledge(
-                target_metric_types=LARGE_TARGET_METRIC_TYPES
-            )
+            pk = SockShopKnowledge(target_metric_types=LARGE_TARGET_METRIC_TYPES)
         case ["tt", "small"]:
-            pk = TrainTicketKnowledge(
-                target_metric_types=MEDIUM_TARGET_METRIC_TYPES
-            )
+            pk = TrainTicketKnowledge(target_metric_types=MEDIUM_TARGET_METRIC_TYPES)
         case ["tt", "medium"]:
-            pk = TrainTicketKnowledge(
-                target_metric_types=MEDIUM_TARGET_METRIC_TYPES
-            )
+            pk = TrainTicketKnowledge(target_metric_types=MEDIUM_TARGET_METRIC_TYPES)
         case ["tt", "large"]:
-            pk = TrainTicketKnowledge(
-                target_metric_types=LARGE_TARGET_METRIC_TYPES
-            )
+            pk = TrainTicketKnowledge(target_metric_types=LARGE_TARGET_METRIC_TYPES)
         case _:
             raise ValueError(f"Unknown dataset: {data_param['dataset_name']}")
 

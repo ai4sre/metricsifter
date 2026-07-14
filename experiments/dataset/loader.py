@@ -22,17 +22,24 @@ EMPIRICAL_TT_LARGE_DATA_FILE = DATA_DIR / "tt-large.tar.bz2"
 SOCKSHOP_DATA_FILES = (EMPIRICAL_SS_SMALL_DATA_FILE, EMPIRICAL_SS_MEDIUM_DATA_FILE, EMPIRICAL_SS_LARGE_DATA_FILE)
 TRAINTICKET_DATA_FILES = (EMPIRICAL_TT_SMALL_DATA_FILE, EMPIRICAL_TT_MEDIUM_DATA_FILE, EMPIRICAL_TT_LARGE_DATA_FILE)
 
-SYNTHETIC_PARAM_PATTERN = re.compile(r"anomaly_type-(?P<anomaly_type>\d+)_func_type-(?P<func_type>\w+)_noise_type-(?P<noise_type>\w+)_weight_generator-(?P<weight_generator>\w+)")
+SYNTHETIC_PARAM_PATTERN = re.compile(
+    r"anomaly_type-(?P<anomaly_type>\d+)_func_type-(?P<func_type>\w+)_noise_type-(?P<noise_type>\w+)_weight_generator-(?P<weight_generator>\w+)"
+)
 
 
 def _transform_dict_to_array(result: dict) -> list[tuple[dict, dict]]:
     return [  # data_params + data
-        ({ "dataset_name": dataset_name,
-          "anomaly_type": anomaly_type,
-          "func_type": func_type, "noise_type": noise_type,
-          "weight_generator": weight_generator,
-          "trial_no": trial_no }
-        , data)
+        (
+            {
+                "dataset_name": dataset_name,
+                "anomaly_type": anomaly_type,
+                "func_type": func_type,
+                "noise_type": noise_type,
+                "weight_generator": weight_generator,
+                "trial_no": trial_no,
+            },
+            data,
+        )
         for (dataset_name, anomaly_type, func_type, noise_type, weight_generator, trial_no), data in result.items()
     ]
 
@@ -83,7 +90,7 @@ def _load_empirical_tar_file(tarinfo: tarfile.TarInfo, tar_bytes: bytes) -> tupl
     path = Path(tarinfo.name)
     trial_no: int = int(path.parent.name)
 
-    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:bz2') as tar:
+    with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:bz2") as tar:
         f = tar.extractfile(tarinfo.name)
         if f is None:
             raise ValueError(f"{path.name} is None")
@@ -92,38 +99,41 @@ def _load_empirical_tar_file(tarinfo: tarfile.TarInfo, tar_bytes: bytes) -> tupl
         match path.name:
             case "metrics.csv":
                 data = pd.read_csv(f, index_col=0)
-                return params, { "data": data }
+                return params, {"data": data}
             case "data_spec.json":
                 data_spec = json.load(f)
-                return params, { "data_spec": data_spec }
+                return params, {"data_spec": data_spec}
             case _:
                 raise ValueError(f"Unknown file: {path.name}")
 
 
 def _transform_dict_to_array_for_empirical(result: dict) -> list[tuple[dict, dict]]:
     return [
-        ({
-            "dataset_name": dataset_name,
-            "fault_type": fault_type,
-            "fault_comp": fault_comp,
-            "trial_no": trial_no,
-        }, data)
+        (
+            {
+                "dataset_name": dataset_name,
+                "fault_type": fault_type,
+                "fault_comp": fault_comp,
+                "trial_no": trial_no,
+            },
+            data,
+        )
         for _, nested_items in result.items()
         for (dataset_name, fault_type, fault_comp, trial_no), data in nested_items.items()
     ]
 
 
-def _load_empirical_data(data_paths: tuple[Path,...], n_jobs: int = -1) -> list[tuple[dict, dict]]:
+def _load_empirical_data(data_paths: tuple[Path, ...], n_jobs: int = -1) -> list[tuple[dict, dict]]:
     result: dict = defaultdict(lambda: defaultdict(dict))
 
     for data_path in data_paths:
         if not data_path.exists():
             raise FileNotFoundError(f"{data_path} does not exist")
 
-        with open(data_path.as_posix(), 'rb') as f:
+        with open(data_path.as_posix(), "rb") as f:
             tar_bytes = f.read()
-        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode='r:bz2') as tar:
-            members = [member for member in tar.getmembers() if member.isfile() ]
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:bz2") as tar:
+            members = [member for member in tar.getmembers() if member.isfile()]
 
         ret = Parallel(n_jobs=n_jobs)(delayed(_load_empirical_tar_file)(member, tar_bytes) for member in members)
         assert ret is not None, "Parallel execution failed"

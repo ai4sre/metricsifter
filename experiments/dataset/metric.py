@@ -22,6 +22,7 @@ ALL_METRIC_TYPES: Final[dict[str, bool]] = {
     METRIC_TYPE_MIDDLEWARES: True,
 }
 
+
 @unique
 class MetricType(IntEnum):
     CONTAINER = auto()
@@ -53,11 +54,14 @@ def parse_metric(metric: str) -> tuple[str, str, MetricType]:
 def is_container_metric(metric: str) -> bool:
     return metric.startswith("c-")
 
+
 def is_middleware_metric(metric: str) -> bool:
     return metric.startswith("m-")
 
+
 def is_service_metric(metric: str) -> bool:
     return metric.startswith("s-")
+
 
 def is_node_metric(metric: str) -> bool:
     return metric.startswith("n-")

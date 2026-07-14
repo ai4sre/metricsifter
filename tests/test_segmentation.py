@@ -21,9 +21,7 @@ class TestSegmentChangepointsWithKDE:
         change_points = [10, 12, 14, 50, 52, 54]
         time_series_length = 100
 
-        labels, label_to_cps = segment_changepoints_with_kde(
-            change_points, time_series_length, kde_bandwidth=2.5
-        )
+        labels, label_to_cps = segment_changepoints_with_kde(change_points, time_series_length, kde_bandwidth=2.5)
 
         # Should detect at least 2 clusters
         assert len(label_to_cps) >= 2, "Should detect at least 2 clusters"
@@ -41,9 +39,7 @@ class TestSegmentChangepointsWithKDE:
         change_points = [50, 51, 52, 53, 54]
         time_series_length = 100
 
-        labels, label_to_cps = segment_changepoints_with_kde(
-            change_points, time_series_length, kde_bandwidth=2.5
-        )
+        labels, label_to_cps = segment_changepoints_with_kde(change_points, time_series_length, kde_bandwidth=2.5)
 
         # Should detect single cluster
         assert len(label_to_cps) == 1, "Should detect single cluster"
@@ -55,9 +51,7 @@ class TestSegmentChangepointsWithKDE:
         change_points = [50, 50, 50, 50]
         time_series_length = 100
 
-        labels, label_to_cps = segment_changepoints_with_kde(
-            change_points, time_series_length, kde_bandwidth=2.5
-        )
+        labels, label_to_cps = segment_changepoints_with_kde(change_points, time_series_length, kde_bandwidth=2.5)
 
         # Should return single cluster (0)
         assert len(label_to_cps) == 1
@@ -85,14 +79,10 @@ class TestSegmentChangepointsWithKDE:
         time_series_length = 100
 
         # Small bandwidth
-        _, label_to_cps_small = segment_changepoints_with_kde(
-            change_points, time_series_length, kde_bandwidth=1.0
-        )
+        _, label_to_cps_small = segment_changepoints_with_kde(change_points, time_series_length, kde_bandwidth=1.0)
 
         # Large bandwidth
-        _, label_to_cps_large = segment_changepoints_with_kde(
-            change_points, time_series_length, kde_bandwidth=10.0
-        )
+        _, label_to_cps_large = segment_changepoints_with_kde(change_points, time_series_length, kde_bandwidth=10.0)
 
         # Larger bandwidth tends to produce fewer clusters
         assert len(label_to_cps_large) <= len(label_to_cps_small) or len(label_to_cps_large) == len(label_to_cps_small)
@@ -101,9 +91,7 @@ class TestSegmentChangepointsWithKDE:
         """A changepoint on a segment boundary should not be duplicated."""
         change_points = [1, 4, 4, 6, 8, 8]
 
-        labels, label_to_cps = segment_changepoints_with_kde(
-            change_points, time_series_length=21, kde_bandwidth=1.0
-        )
+        labels, label_to_cps = segment_changepoints_with_kde(change_points, time_series_length=21, kde_bandwidth=1.0)
 
         all_cps = np.concatenate(list(label_to_cps.values()))
         assert np.count_nonzero(all_cps == 6) == 1
@@ -126,12 +114,12 @@ class TestSegmentNestedChangepoints:
 
         # Mapping of changepoints to metrics
         cp_to_metrics = {
-            10: ['metric1', 'metric2'],
-            12: ['metric1'],
-            14: ['metric2'],
-            50: ['metric3', 'metric4'],
-            52: ['metric3'],
-            54: ['metric4'],
+            10: ["metric1", "metric2"],
+            12: ["metric1"],
+            14: ["metric2"],
+            50: ["metric3", "metric4"],
+            52: ["metric3"],
+            54: ["metric4"],
         }
 
         time_series_length = 100
@@ -151,19 +139,19 @@ class TestSegmentNestedChangepoints:
         for metrics in label_to_metrics.values():
             all_metrics.update(metrics)
 
-        assert 'metric1' in all_metrics
-        assert 'metric2' in all_metrics
-        assert 'metric3' in all_metrics
-        assert 'metric4' in all_metrics
+        assert "metric1" in all_metrics
+        assert "metric2" in all_metrics
+        assert "metric3" in all_metrics
+        assert "metric4" in all_metrics
 
     def test_with_no_change_points_metrics(self):
         """Should handle metrics with NO_CHANGE_POINTS"""
         flatten_change_points = [10, 12]
 
         cp_to_metrics = {
-            10: ['metric1'],
-            12: ['metric1'],
-            NO_CHANGE_POINTS: ['metric_constant'],  # Metric with no changepoints
+            10: ["metric1"],
+            12: ["metric1"],
+            NO_CHANGE_POINTS: ["metric_constant"],  # Metric with no changepoints
         }
 
         time_series_length = 100
@@ -177,8 +165,8 @@ class TestSegmentNestedChangepoints:
         for metrics in label_to_metrics.values():
             all_metrics.update(metrics)
 
-        assert 'metric_constant' not in all_metrics
-        assert 'metric1' in all_metrics
+        assert "metric_constant" not in all_metrics
+        assert "metric1" in all_metrics
 
     def test_multiple_clusters(self):
         """Should handle multiple clusters formation"""
@@ -186,12 +174,12 @@ class TestSegmentNestedChangepoints:
         flatten_change_points = [10, 11, 12, 80, 81, 82]
 
         cp_to_metrics = {
-            10: ['metric1'],
-            11: ['metric1', 'metric2'],
-            12: ['metric2'],
-            80: ['metric3'],
-            81: ['metric3', 'metric4'],
-            82: ['metric4'],
+            10: ["metric1"],
+            11: ["metric1", "metric2"],
+            12: ["metric2"],
+            80: ["metric3"],
+            81: ["metric3", "metric4"],
+            82: ["metric4"],
         }
 
         time_series_length = 100
@@ -211,7 +199,7 @@ class TestSegmentNestedChangepoints:
         flatten_change_points = [50]
 
         cp_to_metrics = {
-            50: ['metric1', 'metric2'],
+            50: ["metric1", "metric2"],
         }
 
         time_series_length = 100
@@ -229,5 +217,5 @@ class TestSegmentNestedChangepoints:
         for metrics in label_to_metrics.values():
             all_metrics.update(metrics)
 
-        assert 'metric1' in all_metrics
-        assert 'metric2' in all_metrics
+        assert "metric1" in all_metrics
+        assert "metric2" in all_metrics

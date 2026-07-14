@@ -46,6 +46,7 @@ FAULT_TO_ROOT_FAULT_METRIC_PATTERNS: Final[dict[str, dict[tuple[str, str], list[
     },
 }
 
+
 def get_fault_to_root_fault_base_metrics(
     chaos_type: str, role: str, runtime: str, optional_candidates: bool = False
 ) -> list[str]:
@@ -53,7 +54,10 @@ def get_fault_to_root_fault_base_metrics(
 
 
 def select_root_fault_metrics(
-    pk: PriorKnowledge, metrics: set[str], fault_type: str, fault_comp: str,
+    pk: PriorKnowledge,
+    metrics: set[str],
+    fault_type: str,
+    fault_comp: str,
 ) -> set[str]:
     root_fault_metrics: set[str] = set()
     for metric in metrics:

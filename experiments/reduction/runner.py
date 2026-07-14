@@ -37,6 +37,7 @@ EMPIRICAL_REDUCTION_METHODS: Final[list[str]] = [
     "HDBS-R",
 ]
 
+
 def reduce_by_method(
     method: str,
     data: pd.DataFrame,
@@ -54,14 +55,21 @@ def reduce_by_method(
             remained_metrics = set(ground_truth["root_fault_nodes"] + ground_truth["fault_propagated_nodes"])
         case "MetricSifter upto CPD":
             reducer = sifter.Sifter(
-                search_method="pelt", cost_model="l2", penalty="bic", penalty_adjust=2.5, n_jobs=1,
+                search_method="pelt",
+                cost_model="l2",
+                penalty="bic",
+                penalty_adjust=2.5,
+                n_jobs=1,
             )
             ret = reducer.run_upto_cpd(data, without_simple_filter=True)
             remained_metrics = set(ret.columns.tolist())
         case "MetricSifter":
             reducer = sifter.Sifter(
-                search_method="pelt", cost_model="l2", penalty="bic",
-                penalty_adjust=2.5, bandwidth=3.5,
+                search_method="pelt",
+                cost_model="l2",
+                penalty="bic",
+                penalty_adjust=2.5,
+                bandwidth=3.5,
                 segment_selection_method="weighted_max",
                 n_jobs=1,
             )
@@ -105,9 +113,11 @@ def run_by_component_for_empirical(
     granularity: Literal["service", "container"] = "service",
     n_jobs: int = 1,
 ) -> set[str]:
-    """ Run reduction methods by component unit for empirical data """
+    """Run reduction methods by component unit for empirical data"""
 
     comp_to_metrics_df = separate_data_by_component(data, pk, granularity=granularity)
-    ret = Parallel(n_jobs=n_jobs)(delayed(reduce_by_method)(method, _data, ground_truth) for _data in comp_to_metrics_df.values())
+    ret = Parallel(n_jobs=n_jobs)(
+        delayed(reduce_by_method)(method, _data, ground_truth) for _data in comp_to_metrics_df.values()
+    )
     assert ret is not None, "Parallel execution failed"
     return set.union(*ret)

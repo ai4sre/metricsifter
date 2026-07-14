@@ -17,18 +17,14 @@ def separate_data_by_component(
             for service, containers in pk.get_containers_of_service().items():
                 metrics_dfs: list[pd.DataFrame] = []
 
-                service_metrics_df = data.loc[
-                    :, data.columns.str.startswith(f"s-{service}_")
-                ]
+                service_metrics_df = data.loc[:, data.columns.str.startswith(f"s-{service}_")]
                 if len(service_metrics_df.columns) > 0:
                     metrics_dfs.append(service_metrics_df)
 
                 for container in containers:
                     container_metrics_df = data.loc[
                         :,
-                        data.columns.str.startswith(
-                            (f"c-{container}_", f"m-{container}_")
-                        ),
+                        data.columns.str.startswith((f"c-{container}_", f"m-{container}_")),
                     ]
                     if len(container_metrics_df.columns) > 0:
                         metrics_dfs.append(container_metrics_df)
@@ -40,9 +36,7 @@ def separate_data_by_component(
             # Clustering metrics by service including services, containers and middlewares metrics
             for service, containers in pk.get_containers_of_service().items():
                 # 1. service-level clustering
-                service_metrics_df = data.loc[
-                    :, data.columns.str.startswith(f"s-{service}_")
-                ]
+                service_metrics_df = data.loc[:, data.columns.str.startswith(f"s-{service}_")]
                 if len(service_metrics_df.columns) > 1:
                     comp_to_metrics_df[f"s-{service}"] = service_metrics_df
 
@@ -51,9 +45,7 @@ def separate_data_by_component(
                     # perform clustering in each type of metric
                     container_metrics_df = data.loc[
                         :,
-                        data.columns.str.startswith(
-                            (f"c-{container}_", f"m-{container}_")
-                        ),
+                        data.columns.str.startswith((f"c-{container}_", f"m-{container}_")),
                     ]
                     if len(container_metrics_df.columns) <= 1:
                         continue
