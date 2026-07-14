@@ -97,7 +97,7 @@ def segment_changepoints_with_kde(
     else:
         clusters.append(np.where(x < s[mi][0])[0])  # most left cluster
         for i_cluster in range(len(mi) - 1):  # all middle cluster
-            clusters.append(np.where((x >= s[mi][i_cluster]) * (x <= s[mi][i_cluster + 1]))[0])
+            clusters.append(np.where((x >= s[mi][i_cluster]) & (x < s[mi][i_cluster + 1]))[0])
         clusters.append(np.where(x >= s[mi][-1])[0])  # most right cluster
 
     labels = np.zeros(len(x), dtype=int)

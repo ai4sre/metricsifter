@@ -97,6 +97,19 @@ class TestSegmentChangepointsWithKDE:
         # Larger bandwidth tends to produce fewer clusters
         assert len(label_to_cps_large) <= len(label_to_cps_small) or len(label_to_cps_large) == len(label_to_cps_small)
 
+    def test_boundary_changepoint_belongs_to_exactly_one_segment(self):
+        """A changepoint on a segment boundary should not be duplicated."""
+        change_points = [1, 4, 4, 6, 8, 8]
+
+        labels, label_to_cps = segment_changepoints_with_kde(
+            change_points, time_series_length=21, kde_bandwidth=1.0
+        )
+
+        all_cps = np.concatenate(list(label_to_cps.values()))
+        assert np.count_nonzero(all_cps == 6) == 1
+        for position, cp in enumerate(change_points):
+            assert cp in label_to_cps[labels[position]]
+
     def test_empty_changepoints_raises_value_error(self):
         """Should raise ValueError for empty changepoints list"""
         with pytest.raises(ValueError, match="change_points should not be empty"):
