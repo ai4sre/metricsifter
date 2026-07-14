@@ -339,7 +339,7 @@ python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d8551
 
 ```bash
 # The standard suite does not require the optional PyRCA Git dependency.
-JOBLIB_MULTIPROCESSING=0 uv run pytest -s -vv tests
+uv run pytest -s -vv tests
 ```
 
 CI runs on every push and pull request. It executes the complete `tests` suite on
@@ -378,19 +378,23 @@ tag/version check, build, and fresh-environment wheel smoke test have succeeded.
 
 2. **Run the publication gates locally**
    ```bash
-   JOBLIB_MULTIPROCESSING=0 uv run pytest -s -vv tests
+   uv run pytest -s -vv tests
    uv run ruff check .
    uv run black --check .
    uv lock --check
    uv build
 
    # Install only the built wheel into a fresh environment and test it outside the checkout.
+   WHEEL_PATH="$PWD/dist/metricsifter-X.Y.Z-py3-none-any.whl"
    SMOKE_DIR="$(mktemp -d)"
-   python -m venv "$SMOKE_DIR/.venv"
-   "$SMOKE_DIR/.venv/bin/pip" install dist/metricsifter-X.Y.Z-py3-none-any.whl
-   (cd "$SMOKE_DIR" && ./.venv/bin/python -c \
-     'import metricsifter; assert metricsifter.__version__ == "X.Y.Z"')
-   (cd "$SMOKE_DIR" && ./.venv/bin/metricsifter --help)
+   uv venv --python 3.11 "$SMOKE_DIR/.venv"
+   uv pip install --python "$SMOKE_DIR/.venv/bin/python" "$WHEEL_PATH"
+   (
+     cd "$SMOKE_DIR"
+     "$SMOKE_DIR/.venv/bin/python" -c \
+       'import metricsifter; assert metricsifter.__version__ == "X.Y.Z"'
+     "$SMOKE_DIR/.venv/bin/metricsifter" --help
+   )
    ```
 
 3. **Commit and tag the release**
