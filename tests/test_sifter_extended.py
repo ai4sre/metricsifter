@@ -17,6 +17,10 @@ from metricsifter.sifter import Sifter
 class TestSifterErrorHandling:
     """Test error handling in Sifter class"""
 
+    def test_invalid_search_method_is_rejected_for_empty_dataframe(self):
+        with pytest.raises(ValueError, match=r"search_method.*binseg.*bottomup.*pelt"):
+            Sifter(search_method="invalid", n_jobs=1).run(pd.DataFrame())
+
     @pytest.mark.parametrize("entrypoint", ["run", "run_upto_cpd"])
     def test_zero_row_float_dataframe_without_simple_filter(self, entrypoint):
         data = pd.DataFrame({"metric": pd.Series(dtype=float)})
@@ -237,6 +241,19 @@ class TestSifterParameterVariations:
     def test_invalid_numeric_configuration_raises(self, parameter, value):
         with pytest.raises(ValueError, match=parameter):
             Sifter(**{parameter: value})
+
+    @pytest.mark.parametrize("parameter", ["penalty", "penalty_adjust", "bandwidth"])
+    def test_large_integer_configuration_is_accepted(self, parameter):
+        value = 10**20
+
+        sifter = Sifter(**{parameter: value})
+
+        assert getattr(sifter, parameter) == value
+
+    @pytest.mark.parametrize("parameter", ["penalty", "penalty_adjust", "bandwidth"])
+    def test_integer_too_large_for_float_raises_value_error(self, parameter):
+        with pytest.raises(ValueError, match=rf"{parameter}.*finite positive"):
+            Sifter(**{parameter: 10**400})
 
     def test_different_penalty_adjust(self, sample_data):
         """Should work with different penalty_adjust values"""

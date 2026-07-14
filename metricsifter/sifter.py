@@ -1,3 +1,4 @@
+import math
 from typing import Callable
 
 import numpy as np
@@ -5,7 +6,7 @@ import pandas as pd
 
 from metricsifter import utils
 from metricsifter.algo import detection, segmentation
-from metricsifter.algo.detection import SIGMA_ESTIMATORS
+from metricsifter.algo.detection import SEARCH_METHODS, SIGMA_ESTIMATORS
 from metricsifter.types import BandwidthTuning, PenaltyTuning, Segment, SegmentCandidate, SegmentInfo, SiftResult
 
 #: KDE bandwidth rule-of-thumb names accepted by ``bandwidth`` (in addition to a float).
@@ -19,12 +20,13 @@ AUTO: str = "auto"
 
 
 def _validate_finite_positive(name: str, value: object) -> None:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float, np.integer, np.floating))
-        or not np.isfinite(value)
-        or value <= 0
-    ):
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite positive number; got {value!r}.")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"{name} must be a finite positive number; got {value!r}.") from None
+    if not math.isfinite(normalized) or normalized <= 0:
         raise ValueError(f"{name} must be a finite positive number; got {value!r}.")
 
 
@@ -75,10 +77,14 @@ class Sifter:
                 = OS entropy). Fix it for reproducible auto-tuning.
 
         Raises:
-            ValueError: If a string option is unsupported, or a numeric
-                ``penalty``, ``penalty_adjust`` or ``bandwidth`` is not finite
-                and positive.
+            ValueError: If ``search_method`` or another string option is
+                unsupported, or a numeric ``penalty``, ``penalty_adjust`` or
+                ``bandwidth`` is not finite and positive.
         """
+        if search_method not in SEARCH_METHODS:
+            raise ValueError(
+                f"search_method={search_method!r} is not supported. Choose one of {sorted(SEARCH_METHODS)}."
+            )
         if sigma_estimator not in SIGMA_ESTIMATORS:
             raise ValueError(
                 f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
