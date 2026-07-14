@@ -17,6 +17,33 @@ from metricsifter.sifter import Sifter
 class TestSifterErrorHandling:
     """Test error handling in Sifter class"""
 
+    @pytest.mark.parametrize("entrypoint", ["run", "run_upto_cpd"])
+    def test_zero_row_float_dataframe_without_simple_filter(self, entrypoint):
+        data = pd.DataFrame({"metric": pd.Series(dtype=float)})
+
+        result = getattr(Sifter(n_jobs=1), entrypoint)(data, without_simple_filter=True)
+
+        assert result.empty
+
+    def test_constant_dataframe_without_filter_and_auto_penalty(self):
+        data = pd.DataFrame({"metric": np.ones(20)})
+
+        result = Sifter(penalty_adjust="auto", n_jobs=1).run_upto_cpd(data, without_simple_filter=True)
+
+        assert result.empty
+
+    @pytest.mark.parametrize("entrypoint", ["sift", "run_upto_cpd"])
+    def test_duplicate_column_names_raise_value_error(self, entrypoint):
+        data = pd.DataFrame([[1.0, 2.0]], columns=["metric", "metric"])
+
+        with pytest.raises(ValueError, match="unique"):
+            getattr(Sifter(n_jobs=1), entrypoint)(data, without_simple_filter=True)
+
+    @pytest.mark.parametrize("entrypoint", ["sift", "run_upto_cpd"])
+    def test_non_dataframe_input_raises_value_error(self, entrypoint):
+        with pytest.raises(ValueError, match="DataFrame"):
+            getattr(Sifter(n_jobs=1), entrypoint)([1.0, 2.0])
+
     def test_empty_dataframe(self):
         """Should handle empty DataFrame"""
         empty_data = pd.DataFrame()
@@ -99,6 +126,21 @@ class TestSifterErrorHandling:
 class TestFilterNoChangesParallel:
     """_filter_no_changes must be independent of n_jobs."""
 
+    def test_missing_values_do_not_hide_observed_changes(self):
+        data = pd.DataFrame(
+            {
+                "changing_with_nan": [1.0, np.nan, 2.0, np.nan, 10.0],
+                "all_nan": [np.nan] * 5,
+                "constant": [3.0] * 5,
+                "constant_with_nan": [3.0, np.nan, 3.0, np.nan, 3.0],
+                "constant_difference": [1.0, 2.0, 3.0, 4.0, 5.0],
+            }
+        )
+
+        filtered = Sifter._filter_no_changes(data, n_jobs=1)
+
+        assert list(filtered.columns) == ["changing_with_nan"]
+
     def test_parallel_matches_sequential(self):
         np.random.seed(42)
         data = pd.DataFrame(
@@ -174,6 +216,28 @@ class TestSifterParameterVariations:
 
             assert isinstance(filtered_data, pd.DataFrame)
 
+    @pytest.mark.parametrize(
+        ("parameter", "value"),
+        [
+            pytest.param("penalty", "unsupported", id="penalty-string"),
+            pytest.param("penalty", 0.0, id="penalty-zero"),
+            pytest.param("penalty", -1.0, id="penalty-negative"),
+            pytest.param("penalty", np.inf, id="penalty-infinite"),
+            pytest.param("penalty", np.nan, id="penalty-nan"),
+            pytest.param("penalty_adjust", 0.0, id="penalty-adjust-zero"),
+            pytest.param("penalty_adjust", -1.0, id="penalty-adjust-negative"),
+            pytest.param("penalty_adjust", np.inf, id="penalty-adjust-infinite"),
+            pytest.param("penalty_adjust", np.nan, id="penalty-adjust-nan"),
+            pytest.param("bandwidth", 0.0, id="bandwidth-zero"),
+            pytest.param("bandwidth", -1.0, id="bandwidth-negative"),
+            pytest.param("bandwidth", np.inf, id="bandwidth-infinite"),
+            pytest.param("bandwidth", np.nan, id="bandwidth-nan"),
+        ],
+    )
+    def test_invalid_numeric_configuration_raises(self, parameter, value):
+        with pytest.raises(ValueError, match=parameter):
+            Sifter(**{parameter: value})
+
     def test_different_penalty_adjust(self, sample_data):
         """Should work with different penalty_adjust values"""
         for adjust in [0.5, 1.0, 2.0, 5.0]:
@@ -232,6 +296,21 @@ class TestSifterParameterVariations:
 
         assert isinstance(result_with, pd.DataFrame)
         assert isinstance(result_without, pd.DataFrame)
+
+    def test_run_upto_cpd_preserves_input_column_order(self, monkeypatch):
+        expected_order = ["metric_c", "metric_a", "metric_d", "metric_b"]
+        data = pd.DataFrame({column: [0.0, 1.0] for column in expected_order})
+        sifter = Sifter(n_jobs=1)
+
+        def detect_all(X):
+            metric_to_cps = {metric: [1] for metric in X.columns}
+            return [1] * len(metric_to_cps), {1: list(X.columns)}, metric_to_cps, None
+
+        monkeypatch.setattr(sifter, "_detect_changepoints", detect_all)
+
+        result = sifter.run_upto_cpd(data, without_simple_filter=True)
+
+        assert list(result.columns) == expected_order
 
 
 # ============================================================================

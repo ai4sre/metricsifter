@@ -11,8 +11,21 @@ from metricsifter.types import BandwidthTuning, PenaltyTuning, Segment, SegmentC
 #: KDE bandwidth rule-of-thumb names accepted by ``bandwidth`` (in addition to a float).
 BANDWIDTH_RULES: frozenset[str] = frozenset({"scott", "silverman"})
 
+#: Information-criterion names accepted by ``penalty`` (in addition to a float).
+PENALTY_RULES: frozenset[str] = frozenset({"aic", "bic"})
+
 #: Sentinel that turns on stability-selection auto-tuning for a parameter.
 AUTO: str = "auto"
+
+
+def _validate_finite_positive(name: str, value: object) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float, np.integer, np.floating))
+        or not np.isfinite(value)
+        or value <= 0
+    ):
+        raise ValueError(f"{name} must be a finite positive number; got {value!r}.")
 
 
 class Sifter:
@@ -62,20 +75,34 @@ class Sifter:
                 = OS entropy). Fix it for reproducible auto-tuning.
 
         Raises:
-            ValueError: If ``sigma_estimator``, a string ``penalty_adjust`` or a
-                string ``bandwidth`` is not one of the supported values.
+            ValueError: If a string option is unsupported, or a numeric
+                ``penalty``, ``penalty_adjust`` or ``bandwidth`` is not finite
+                and positive.
         """
         if sigma_estimator not in SIGMA_ESTIMATORS:
             raise ValueError(
                 f"sigma_estimator={sigma_estimator!r} is not supported. " f"Choose one of {sorted(SIGMA_ESTIMATORS)}."
             )
-        if isinstance(penalty_adjust, str) and penalty_adjust != AUTO:
-            raise ValueError(f"penalty_adjust={penalty_adjust!r} is not supported. Pass a float or {AUTO!r}.")
-        if isinstance(bandwidth, str) and bandwidth not in BANDWIDTH_RULES | {AUTO}:
-            raise ValueError(
-                f"bandwidth={bandwidth!r} is not supported. "
-                f"Pass a float or one of {sorted(BANDWIDTH_RULES | {AUTO})}."
-            )
+        if isinstance(penalty, str):
+            if penalty not in PENALTY_RULES:
+                raise ValueError(
+                    f"penalty={penalty!r} is not supported. Pass a finite positive number or one of {sorted(PENALTY_RULES)}."
+                )
+        else:
+            _validate_finite_positive("penalty", penalty)
+        if isinstance(penalty_adjust, str):
+            if penalty_adjust != AUTO:
+                raise ValueError(f"penalty_adjust={penalty_adjust!r} is not supported. Pass a float or {AUTO!r}.")
+        else:
+            _validate_finite_positive("penalty_adjust", penalty_adjust)
+        if isinstance(bandwidth, str):
+            if bandwidth not in BANDWIDTH_RULES | {AUTO}:
+                raise ValueError(
+                    f"bandwidth={bandwidth!r} is not supported. "
+                    f"Pass a float or one of {sorted(BANDWIDTH_RULES | {AUTO})}."
+                )
+        else:
+            _validate_finite_positive("bandwidth", bandwidth)
         self.search_method = search_method
         self.cost_model = cost_model
         self.bandwidth = bandwidth
@@ -88,18 +115,26 @@ class Sifter:
 
     @staticmethod
     def _filter_no_changes(X: pd.DataFrame, n_jobs: int = -1) -> pd.DataFrame:
-        vf: Callable = np.vectorize(lambda x: np.isnan(x) or x == 0)
-
         def filter(x: pd.Series) -> bool:
-            # pd.Series.diff returns a series with the first element is NaN
-            if x.isna().all() or (x == x.iat[0]).all() or ((diff_x := np.diff(x)) == diff_x[0]).all():
+            observed = x.dropna()
+            if observed.empty or (observed == observed.iat[0]).all():
                 return False
-            # remove an array including only the same value or nan
-            return not vf(diff_x).all()
+            if not x.hasnans:
+                diff_x = np.diff(x)
+                if (diff_x == diff_x[0]).all():
+                    return False
+            return True
 
         if n_jobs != 1:
             return X.loc[:, utils.parallel_apply(X, filter, n_jobs)]
         return X.loc[:, X.apply(filter)]
+
+    @staticmethod
+    def _validate_input(data: object) -> None:
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError(f"data must be a pandas DataFrame; got {type(data).__name__}.")
+        if not data.columns.is_unique:
+            raise ValueError("data column names must be unique.")
 
     def _detect_changepoints(
         self, X: pd.DataFrame
@@ -167,7 +202,13 @@ class Sifter:
         return resolved, tuning
 
     def run_upto_cpd(self, data: pd.DataFrame, without_simple_filter: bool = False) -> pd.DataFrame:
-        """Run up to change point detection"""
+        """Run up to change point detection.
+
+        Raises:
+            ValueError: If ``data`` is not a DataFrame or its column names are
+                not unique.
+        """
+        self._validate_input(data)
         if without_simple_filter:
             X = data
         else:
@@ -176,8 +217,8 @@ class Sifter:
 
         # STEP1: detect change points
         _, _, metric_to_cps, _ = self._detect_changepoints(X)
-        remained_metrics = set(metric for metric, cps in metric_to_cps.items() if len(cps) > 0)
-        return X.loc[:, list(remained_metrics)]
+        remained_metrics = [metric for metric in X.columns if metric_to_cps.get(metric)]
+        return X.loc[:, remained_metrics]
 
     def run(self, data: pd.DataFrame, without_simple_filter: bool = False) -> pd.DataFrame:
         """Run the feature reduction pipeline and return filtered metrics
@@ -233,7 +274,12 @@ class Sifter:
 
         Returns:
             SiftResult: Diagnostic result of the feature reduction pipeline
+
+        Raises:
+            ValueError: If ``data`` is not a DataFrame or its column names are
+                not unique.
         """
+        self._validate_input(data)
         input_metrics = list(data.columns)
 
         if without_simple_filter:

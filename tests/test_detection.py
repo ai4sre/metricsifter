@@ -66,6 +66,17 @@ class TestDetectChangePointsWithMissingValues:
 class TestDetectUnivariateChangepoints:
     """Test detect_univariate_changepoints function"""
 
+    @pytest.mark.parametrize("search_method", ["pelt", "binseg", "bottomup"])
+    @pytest.mark.parametrize(
+        "x",
+        [
+            pytest.param(np.array([], dtype=float), id="empty"),
+            pytest.param(np.ones(20), id="constant"),
+        ],
+    )
+    def test_empty_and_constant_series_have_no_changepoints(self, x, search_method):
+        assert detect_univariate_changepoints(x, search_method, "l2", "bic", 2.0) == []
+
     def test_basic_changepoint_detection_pelt(self):
         """Basic changepoint detection - PELT algorithm"""
         # Generate simple data with clear changepoint
