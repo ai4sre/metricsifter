@@ -3,11 +3,11 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
-  build:
-    name: Build distribution
+  validate-and-build:
+    name: Validate and build distribution
     runs-on: ubuntu-latest
 
     steps:
@@ -21,10 +21,42 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
+      - name: Verify lock file
+        run: uv lock --check
+
+      - name: Install development dependencies
+        run: uv sync --locked --extra dev --python 3.11
+
+      - name: Test
+        run: uv run --python 3.11 pytest -s -vv tests
+
+      - name: Lint
+        run: uv run --python 3.11 ruff check .
+
+      - name: Check formatting
+        run: uv run --python 3.11 black --check .
+
+      - name: Verify tag matches the project version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROJECT_VERSION="$(uv run --python 3.11 python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          test "$TAG_VERSION" = "$PROJECT_VERSION"
+
       - name: Build package
         run: uv build
 
-      - name: Store the distribution packages
+      - name: Install and smoke test wheel outside the source checkout
+        run: |
+          WHEEL_PATH="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
+          test -n "$WHEEL_PATH"
+          SMOKE_DIR="$(mktemp -d)"
+          uv venv --python 3.11 "$SMOKE_DIR/.venv"
+          uv pip install --python "$SMOKE_DIR/.venv/bin/python" "$WHEEL_PATH"
+          cd "$SMOKE_DIR"
+          "$SMOKE_DIR/.venv/bin/python" -c "import metricsifter; print(metricsifter.__version__)"
+          "$SMOKE_DIR/.venv/bin/metricsifter" --help
+
+      - name: Store the validated distribution packages
         uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
@@ -32,8 +64,7 @@ jobs:
 
   publish-to-pypi:
     name: Publish to PyPI
-    needs:
-      - build
+    needs: validate-and-build
     runs-on: ubuntu-latest
     environment:
       name: metricsifter_pypi
@@ -42,7 +73,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download all the dists
+      - name: Download the validated distributions
         uses: actions/download-artifact@v4
         with:
           name: python-package-distributions

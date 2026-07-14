@@ -1,15 +1,44 @@
 name: CI
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Verify lock file
+        run: uv lock --check
+
+      - name: Install development dependencies
+        run: uv sync --locked --extra dev --python 3.11
+
+      - name: Lint
+        run: uv run --python 3.11 ruff check .
+
+      - name: Check formatting
+        run: uv run --python 3.11 black --check .
+
   test:
     name: Test Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -22,31 +51,38 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install c libraries
+      - name: Install development dependencies
+        run: uv sync --locked --extra dev --python ${{ matrix.python-version }}
+
+      - name: Test
+        run: uv run --python ${{ matrix.python-version }} pytest -s -vv tests
+
+  package:
+    name: Build and smoke test package
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Build package
+        run: uv build
+
+      - name: Install and smoke test wheel outside the source checkout
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libc6-dev \
-            gcc
-
-      - name: Install dependencies (Python 3.10-3.11)
-        if: matrix.python-version == '3.10' || matrix.python-version == '3.11'
-        run: uv sync --all-extras --python ${{ matrix.python-version }}
-
-      - name: Install sfr-pyrca for tests (Python 3.10-3.11)
-        if: matrix.python-version == '3.10' || matrix.python-version == '3.11'
-        run: uv pip install git+https://github.com/salesforce/PyRCA@d85512b
-
-      - name: Install core package only (Python 3.12+)
-        if: matrix.python-version != '3.10' && matrix.python-version != '3.11'
-        run: uv sync --python ${{ matrix.python-version }}
-
-      - name: Test with pytest (Python 3.10-3.11)
-        if: matrix.python-version == '3.10' || matrix.python-version == '3.11'
-        run: uv run pytest -s -vv tests
-
-      - name: Verify core package installation (Python 3.12+)
-        if: matrix.python-version != '3.10' && matrix.python-version != '3.11'
-        run: |
-          uv run python -c "import metricsifter; print(f'metricsifter imported successfully')"
-          uv run python -c "from metricsifter.sifter import Sifter; print(f'Sifter class imported successfully')"
+          WHEEL_PATH="$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -name '*.whl' -print -quit)"
+          test -n "$WHEEL_PATH"
+          SMOKE_DIR="$(mktemp -d)"
+          uv venv --python 3.11 "$SMOKE_DIR/.venv"
+          uv pip install --python "$SMOKE_DIR/.venv/bin/python" "$WHEEL_PATH"
+          cd "$SMOKE_DIR"
+          "$SMOKE_DIR/.venv/bin/python" -c "import metricsifter; print(metricsifter.__version__)"
+          "$SMOKE_DIR/.venv/bin/metricsifter" --help
