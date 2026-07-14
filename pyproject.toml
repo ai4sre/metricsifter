@@ -25,7 +25,6 @@ dependencies = [
     "joblib",
     "ruptures",
     "statsmodels",
-    "networkx",
 ]
 
 [project.urls]
@@ -52,6 +51,7 @@ experiments = [
     "pandas-stubs",
     "scikit-learn>=1.5",
     "hdbscan",
+    "networkx",
     "threadpoolctl",
 ]
 
