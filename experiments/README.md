@@ -19,13 +19,16 @@ pyenv install 3.11.6
 pyenv local 3.11.6
 ```
 
-Install packages via the following commands.
+Run the following commands from the repository root (the parent directory of this `experiments` directory). The
+editable install uses the current MetricSifter checkout rather than a remote `main` branch. PyRCA is installed
+separately from its pinned Git revision because it is not available on PyPI.
 
 ```shell-session
 python -m venv .venv
-source .venv/bin/activate.fish
+source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -e ".[experiments]"
+python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
 ```
 
 ## Run experiment

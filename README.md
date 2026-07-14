@@ -53,11 +53,15 @@ pip install -e ".[dev]"
 
 **For running experiments** (requires Python 3.10 or 3.11):
 
-The experiments require `sfr-pyrca`, which must be installed separately as it's not available on PyPI:
+From the repository root, install the current checkout with the experiment dependencies. The experiments also require
+`sfr-pyrca`, which must be installed separately because it is not available on PyPI:
 
 ```bash
-# Install sfr-pyrca from GitHub (Python 3.10 or 3.11 only)
-pip install git+https://github.com/salesforce/PyRCA@d85512b
+# Use this checkout rather than a remote metricsifter branch
+python -m pip install -e ".[experiments]"
+
+# Install the pinned sfr-pyrca revision (Python 3.10 or 3.11 only)
+python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
 ```
 
 ## Getting Started
@@ -326,8 +330,9 @@ uv sync --all-extras
 # Or using pip
 pip install -e ".[dev]"
 
-# For experiments (Python 3.10 or 3.11 only)
-pip install git+https://github.com/salesforce/PyRCA@d85512b
+# For experiments, run these commands from the repository root (Python 3.10 or 3.11 only)
+python -m pip install -e ".[dev,experiments]"
+python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
 ```
 
 ### Run Tests
