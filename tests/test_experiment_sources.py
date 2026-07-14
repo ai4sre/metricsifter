@@ -65,3 +65,20 @@ def test_unknown_building_step_error_references_the_requested_step():
             matching_errors.append(node)
 
     assert len(matching_errors) == 1
+
+
+def test_warning_suppression_uses_python_310_compatible_api():
+    tree = _parse("experiments/localization/pyrca.py")
+
+    incompatible_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "catch_warnings"
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "warnings"
+        and {keyword.arg for keyword in node.keywords} & {"action", "category"}
+    ]
+
+    assert incompatible_calls == []

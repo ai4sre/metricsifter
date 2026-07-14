@@ -73,7 +73,8 @@ def run_rca(
             return run_rcd(data_df, boundary_index, top_k, kwargs.get("rcd_n_iters", 1))
         case "PC":
             forbits = get_forbits(set(data_df.columns.tolist()), pk) if use_call_graph else []
-            with warnings.catch_warnings(action="ignore", category=UserWarning):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
                 with threadpool_limits(limits=1):
                     graph = PC(PCConfig(run_pdag2dag=True)).train(
                         pd.concat([normal_data_df, abnormal_data_df], axis=0, ignore_index=True),
@@ -81,7 +82,8 @@ def run_rca(
                     )
         case "LiNGAM":
             forbits = get_forbits(set(data_df.columns.tolist()), pk) if use_call_graph else []
-            with warnings.catch_warnings(action="ignore", category=UserWarning):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
                 with threadpool_limits(limits=1):
                     graph = LiNGAM(LiNGAMConfig(run_pdag2dag=True)).train(
                         pd.concat([normal_data_df, abnormal_data_df], axis=0, ignore_index=True),
