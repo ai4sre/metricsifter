@@ -25,8 +25,9 @@ LOCALIZATUON_METHODS: Final[list[str]] = [
     "LiNGAM+PageRank",
 ]
 
+
 def method_to_method_pair(method: str) -> tuple[str, str]:
-    """ Convert method name to method pair (buiding step, scoring step)."""
+    """Convert method name to method pair (buiding step, scoring step)."""
     match method:
         case "RCD":
             return "RCD", ""
@@ -62,7 +63,7 @@ def run_rca(
     use_call_graph = kwargs.get("use_call_graph", True)
     match building_step:
         case "e-Diagnosis":
-            normal_df = normal_data_df.iloc[-len(abnormal_data_df):, :]
+            normal_df = normal_data_df.iloc[-len(abnormal_data_df) :, :]
             model = EpsilonDiagnosis(config=EpsilonDiagnosisConfig(root_cause_top_k=top_k))
             with threadpool_limits(limits=1):
                 model.train(normal_df)
@@ -72,7 +73,7 @@ def run_rca(
             return run_rcd(data_df, boundary_index, top_k, kwargs.get("rcd_n_iters", 1))
         case "PC":
             forbits = get_forbits(set(data_df.columns.tolist()), pk) if use_call_graph else []
-            with warnings.catch_warnings(action='ignore', category=UserWarning):
+            with warnings.catch_warnings(action="ignore", category=UserWarning):
                 with threadpool_limits(limits=1):
                     graph = PC(PCConfig(run_pdag2dag=True)).train(
                         pd.concat([normal_data_df, abnormal_data_df], axis=0, ignore_index=True),
@@ -80,7 +81,7 @@ def run_rca(
                     )
         case "LiNGAM":
             forbits = get_forbits(set(data_df.columns.tolist()), pk) if use_call_graph else []
-            with warnings.catch_warnings(action='ignore', category=UserWarning):
+            with warnings.catch_warnings(action="ignore", category=UserWarning):
                 with threadpool_limits(limits=1):
                     graph = LiNGAM(LiNGAMConfig(run_pdag2dag=True)).train(
                         pd.concat([normal_data_df, abnormal_data_df], axis=0, ignore_index=True),
@@ -88,11 +89,13 @@ def run_rca(
                     )
         case "CG":
             nx_g = prepare_init_graph(
-                set(data_df.columns.tolist()), pk, enable_orientation=True,
+                set(data_df.columns.tolist()),
+                pk,
+                enable_orientation=True,
             )
             graph = nx.to_pandas_adjacency(nx_g)
         case _:
-            raise ValueError(f"Model {method} is not supported.")
+            raise ValueError(f"Model {building_step} is not supported.")
 
     abnormal_metrics_for_walk: list[str] | None = []
     for abnormal_metric in abnormal_metrics:
@@ -118,7 +121,10 @@ def run_rca(
         case "PageRank":
             with threadpool_limits(limits=1):
                 rank = nx.pagerank(nx.DiGraph(graph).reverse())
-                results = [{"root_cause": k, "score": v} for k, v in sorted(rank.items(), key=lambda item: item[1], reverse=True)][:top_k]
+                results = [
+                    {"root_cause": k, "score": v}
+                    for k, v in sorted(rank.items(), key=lambda item: item[1], reverse=True)
+                ][:top_k]
         case _:
             raise ValueError(f"Unknown walk method: {scoring_step}")
 
@@ -127,8 +133,11 @@ def run_rca(
 
 def get_rank_items_with_rca(
     pk: PriorKnowledge,
-    method: str, top_k: int, data_df: pd.DataFrame,
-    true_root_fault_metrics: set[str], graph: pd.DataFrame,
+    method: str,
+    top_k: int,
+    data_df: pd.DataFrame,
+    true_root_fault_metrics: set[str],
+    graph: pd.DataFrame,
     boundary_index: int,
     sli_metrics: set[str],
     **kwargs: dict,
@@ -136,9 +145,13 @@ def get_rank_items_with_rca(
     building_step, scoring_step = method_to_method_pair(method)
 
     ranks = run_rca(
-        pk, data_df, graph,
-        building_step=building_step, scoring_step=scoring_step,
-        top_k=top_k, boundary_index=boundary_index,
+        pk,
+        data_df,
+        graph,
+        building_step=building_step,
+        scoring_step=scoring_step,
+        top_k=top_k,
+        boundary_index=boundary_index,
         abnormal_metrics=list(sli_metrics),
         **kwargs,
     )
@@ -149,7 +162,10 @@ def get_rank_items_with_rca(
         items.append(
             dict(
                 {
-                    "k": k,"metric": metric, "score": score, "hit": hit,
+                    "k": k,
+                    "metric": metric,
+                    "score": score,
+                    "hit": hit,
                 },
             )
         )
