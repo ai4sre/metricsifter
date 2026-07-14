@@ -20,11 +20,11 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Verify lock file
-        run: uv lock --check
-
       - name: Install development dependencies
         run: uv sync --locked --extra dev --python 3.11
+
+      - name: Verify lock file
+        run: uv lock --check
 
       - name: Lint
         run: uv run --python 3.11 ruff check .

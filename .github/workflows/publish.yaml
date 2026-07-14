@@ -21,9 +21,6 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Verify lock file
-        run: uv lock --check
-
       - name: Install development dependencies
         run: uv sync --locked --extra dev --python 3.11
 
@@ -35,6 +32,9 @@ jobs:
 
       - name: Check formatting
         run: uv run --python 3.11 black --check .
+
+      - name: Verify lock file
+        run: uv lock --check
 
       - name: Verify tag matches the project version
         run: |
