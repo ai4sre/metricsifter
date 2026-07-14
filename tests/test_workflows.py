@@ -28,6 +28,10 @@ def _assert_unconditional_test_matrix(test_job: str) -> None:
 def _assert_wheel_smoke(job: str) -> None:
     assert "*.whl" in job
     assert "mktemp -d" in job
+    assert re.search(
+        r'(?m)^\s*uv pip install --python "\$SMOKE_DIR/\.venv/bin/python" "\$WHEEL_PATH"\s*$',
+        job,
+    )
     _assert_in_order(
         job,
         "uv build",
@@ -37,6 +41,24 @@ def _assert_wheel_smoke(job: str) -> None:
         "import metricsifter",
         "metricsifter.__version__",
         'bin/metricsifter" --help',
+    )
+
+
+def _assert_publish_trigger(trigger: str) -> None:
+    events = re.findall(r"(?m)^  ([\w-]+):", trigger)
+    push = re.search(r"(?ms)^  push:\s*\n(.*?)(?=^  [\w-]+:|\Z)", trigger)
+
+    assert events == ["push"]
+    assert push is not None
+    assert re.findall(r"(?m)^    ([\w-]+):", push.group(1)) == ["tags"]
+    assert re.findall(r'(?m)^      - ["\']?([^"\'\s]+)["\']?\s*$', push.group(1)) == ["v*"]
+    assert "branches" not in push.group(1)
+
+
+def _assert_tag_version_equality(build_job: str) -> None:
+    assert re.search(
+        r'(?m)^\s*test "\$TAG_VERSION" = "\$PROJECT_VERSION"\s*$',
+        build_job,
     )
 
 
@@ -55,13 +77,8 @@ def test_ci_runs_for_pushes_and_pull_requests() -> None:
 
 def test_publish_runs_only_for_version_tags() -> None:
     trigger = PUBLISH_WORKFLOW.split("\njobs:", maxsplit=1)[0]
-    push = re.search(r"(?ms)^  push:\s*\n(.*?)(?=^  [\w-]+:|\Z)", trigger)
 
-    assert push is not None
-    assert re.findall(r"(?m)^    ([\w-]+):", push.group(1)) == ["tags"]
-    assert re.findall(r'(?m)^      - ["\']?([^"\'\s]+)["\']?\s*$', push.group(1)) == ["v*"]
-    assert "branches" not in push.group(1)
-    assert "pull_request:" not in trigger
+    _assert_publish_trigger(trigger)
 
 
 def test_ci_quality_job_uses_locked_dev_environment() -> None:
@@ -96,6 +113,8 @@ def test_ci_packages_only_after_quality_and_tests_and_smoke_tests_the_wheel() ->
 def test_publish_validates_the_tag_and_package_before_uploading_artifacts() -> None:
     build = _job(PUBLISH_WORKFLOW, "validate-and-build")
 
+    _assert_tag_version_equality(build)
+    _assert_wheel_smoke(build)
     _assert_in_order(
         build,
         "uv sync --locked --extra dev",
@@ -154,3 +173,23 @@ def test_workflow_guards_reject_previous_regressions() -> None:
     without_installed_version = package.replace("metricsifter.__version__", "metricsifter")
     with pytest.raises(AssertionError):
         _assert_wheel_smoke(without_installed_version)
+
+    trigger = PUBLISH_WORKFLOW.split("\njobs:", maxsplit=1)[0]
+    extra_event = f"{trigger}  workflow_dispatch:\n"
+    with pytest.raises(AssertionError):
+        _assert_publish_trigger(extra_event)
+
+    wrong_equality = publish.replace(
+        'test "$TAG_VERSION" = "$PROJECT_VERSION"',
+        'test "$TAG_VERSION" != "$PROJECT_VERSION"',
+    )
+    with pytest.raises(AssertionError):
+        _assert_tag_version_equality(wrong_equality)
+
+    for smoke_job in (package, publish):
+        workspace_install = smoke_job.replace(
+            'uv pip install --python "$SMOKE_DIR/.venv/bin/python" "$WHEEL_PATH"',
+            'uv pip install --python "$GITHUB_WORKSPACE/.venv/bin/python" "$WHEEL_PATH"',
+        )
+        with pytest.raises(AssertionError):
+            _assert_wheel_smoke(workspace_install)
