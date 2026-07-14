@@ -44,7 +44,7 @@ uv pip install metricsifter
 git clone https://github.com/ai4sre/metricsifter.git
 cd metricsifter
 
-# Using uv (recommended)
+# Install the current checkout and all repository extras with uv (recommended)
 uv sync --all-extras
 
 # Or using pip
@@ -338,51 +338,83 @@ python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d8551
 ### Run Tests
 
 ```bash
-pytest -s -v tests
+# The standard suite does not require the optional PyRCA Git dependency.
+JOBLIB_MULTIPROCESSING=0 uv run pytest -s -vv tests
 ```
+
+CI runs on every push and pull request. It executes the complete `tests` suite on
+Python 3.10, 3.11, 3.12, 3.13, and 3.14. A separate quality job verifies the lock file,
+Ruff, and Black, and the package job builds a wheel and tests its import and CLI from a
+fresh environment outside the source checkout.
 
 ### Code Quality
 
 ```bash
-# Format code
-black .
+# Verify the same quality gates as CI
+uv lock --check
+uv run ruff check .
+uv run black --check .
 
-# Lint code
-ruff check .
+# Apply the formatter locally
+uv run black .
+
+# Build and inspect the distributions before release
+uv build
 ```
 
 ### Publishing to PyPI
 
-This package uses GitHub Actions to automatically publish to PyPI when a new tag is pushed.
+This package uses GitHub Actions to publish to PyPI when a `v*` tag is pushed. The
+release workflow publishes only after its tests, Ruff, Black, lock-file check,
+tag/version check, build, and fresh-environment wheel smoke test have succeeded.
 
 #### Publishing Process
 
-1. **Update version in pyproject.toml**
+1. **Update and lock the version**
    ```bash
-   # Edit the version field
-   version = "0.0.2"  # Increment as needed
+   # Edit the project version in pyproject.toml to X.Y.Z, then refresh the lock.
+   uv lock
    ```
 
-2. **Commit and tag the release**
+2. **Run the publication gates locally**
    ```bash
-   git add pyproject.toml
-   git commit -m "Bump version to 0.0.2"
-   git tag v0.0.2
+   JOBLIB_MULTIPROCESSING=0 uv run pytest -s -vv tests
+   uv run ruff check .
+   uv run black --check .
+   uv lock --check
+   uv build
+
+   # Install only the built wheel into a fresh environment and test it outside the checkout.
+   SMOKE_DIR="$(mktemp -d)"
+   python -m venv "$SMOKE_DIR/.venv"
+   "$SMOKE_DIR/.venv/bin/pip" install dist/metricsifter-X.Y.Z-py3-none-any.whl
+   (cd "$SMOKE_DIR" && ./.venv/bin/python -c \
+     'import metricsifter; assert metricsifter.__version__ == "X.Y.Z"')
+   (cd "$SMOKE_DIR" && ./.venv/bin/metricsifter --help)
+   ```
+
+3. **Commit and tag the release**
+   ```bash
+   git add pyproject.toml uv.lock
+   git commit -m "Bump version to X.Y.Z"
+   git tag vX.Y.Z
    git push origin main
-   git push origin v0.0.2
+   git push origin vX.Y.Z
    ```
 
-3. **Automatic Publication**
-   - The GitHub Actions workflow will automatically:
-     - Build the package using `uv build`
-     - Publish to TestPyPI (for testing)
-     - Publish to PyPI (production)
+   The tag without its leading `v` must exactly match `project.version`; otherwise the
+   workflow stops before publication.
+
+4. **Automatic publication**
+
+   The workflow validates and builds the distribution once, smoke-tests that wheel,
+   and publishes the validated artifacts to PyPI through Trusted Publishing.
 
 #### Setup Requirements
 
-For the workflow to work, you need to configure Trusted Publishing in PyPI:
+For the workflow to work, configure Trusted Publishing in PyPI:
 
-1. Go to [PyPI](https://pypi.org/) and [TestPyPI](https://test.pypi.org/)
+1. Go to [PyPI](https://pypi.org/)
 2. Create/login to your account
 3. Go to your account settings → Publishing
 4. Add a new Trusted Publisher with:
@@ -390,7 +422,7 @@ For the workflow to work, you need to configure Trusted Publishing in PyPI:
    - **Owner**: `ai4sre`
    - **Repository name**: `metricsifter`
    - **Workflow name**: `publish.yaml`
-   - **Environment name**: `pypi` (for PyPI) or `testpypi` (for TestPyPI)
+   - **Environment name**: `metricsifter_pypi`
 
 Note: Trusted Publishing uses OpenID Connect (OIDC) and doesn't require manual API tokens.
 
@@ -405,21 +437,6 @@ uv build
 # The built files will be in the dist/ directory:
 # - metricsifter-X.Y.Z.tar.gz (source distribution)
 # - metricsifter-X.Y.Z-py3-none-any.whl (wheel)
-```
-
-#### Manual Publishing (Alternative)
-
-If you prefer to publish manually:
-
-```bash
-# Build the package
-uv build
-
-# Publish to TestPyPI (for testing)
-uv publish --publish-url https://test.pypi.org/legacy/
-
-# Publish to PyPI (production)
-uv publish
 ```
 
 ## License

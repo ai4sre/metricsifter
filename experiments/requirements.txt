@@ -1,10 +1,2 @@
-numpy
-pandas
-pandas-stubs
-scipy
-scikit-learn
-hdbscan
-networkx
-joblib
-threadpoolctl
+-e ".[experiments]"
 sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b
