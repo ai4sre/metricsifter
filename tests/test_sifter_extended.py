@@ -255,6 +255,18 @@ class TestSifterParameterVariations:
         with pytest.raises(ValueError, match=rf"{parameter}.*finite positive"):
             Sifter(**{parameter: 10**400})
 
+    @pytest.mark.parametrize("parameter", ["penalty", "penalty_adjust", "bandwidth"])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pytest.param(np.bool_(True), id="numpy-bool"),
+            pytest.param(np.array(1.0), id="zero-dimensional-array"),
+        ],
+    )
+    def test_non_numeric_scalar_configuration_raises_value_error(self, parameter, value):
+        with pytest.raises(ValueError, match=rf"{parameter}.*finite positive"):
+            Sifter(**{parameter: value})
+
     def test_different_penalty_adjust(self, sample_data):
         """Should work with different penalty_adjust values"""
         for adjust in [0.5, 1.0, 2.0, 5.0]:

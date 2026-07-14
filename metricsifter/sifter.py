@@ -20,7 +20,7 @@ AUTO: str = "auto"
 
 
 def _validate_finite_positive(name: str, value: object) -> None:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, float, np.integer, np.floating)):
         raise ValueError(f"{name} must be a finite positive number; got {value!r}.")
     try:
         normalized = float(value)
