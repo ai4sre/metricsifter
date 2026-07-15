@@ -42,17 +42,28 @@ dev = [
     "black",
     "ruff",
     "coverage",
+    "packaging",
     "pytest",
     "setuptools",
     "matplotlib>=3.7",
     "scikit-learn>=1.5",
+    "tomli; python_version < '3.11'",
 ]
 experiments = [
-    "pandas-stubs",
-    "scikit-learn>=1.5",
-    "hdbscan",
-    "networkx",
-    "threadpoolctl",
+    "numpy<2; python_version < '3.12'",
+    "pandas-stubs; python_version < '3.12'",
+    "scikit-learn>=0.24,<1.2; python_version < '3.12'",
+    "hdbscan; python_version < '3.12'",
+    "networkx; python_version < '3.12'",
+    "threadpoolctl; python_version < '3.12'",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "dev" },
+        { extra = "experiments" },
+    ],
 ]
 
 [tool.setuptools.packages.find]

@@ -1,9 +1,9 @@
+import logging
 import warnings
 from typing import Final
 
 import networkx as nx
 import pandas as pd
-from internal_logger.logger import logger
 from priorknowledge.base import PriorKnowledge
 from priorknowledge.call_graph import get_forbits, prepare_init_graph
 from pyrca.analyzers.epsilon_diagnosis import EpsilonDiagnosis, EpsilonDiagnosisConfig
@@ -13,6 +13,8 @@ from pyrca.graphs.causal.pc import PC, PCConfig
 from threadpoolctl import threadpool_limits
 
 from .rcd import run_rcd
+
+logger = logging.getLogger(__name__)
 
 num_trials: int = 5
 top_k: int = 10
