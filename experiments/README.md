@@ -22,33 +22,37 @@ The expected files are `synthetic_data.tar.bz2`, `ss-small.tar.bz2`,
 Install Python via [pyenv](https://github.com/pyenv/pyenv) or any other way you like.
 
 ```shell-session
-pyenv install 3.11.6
-pyenv local 3.11.6
+pyenv install 3.10.14
+pyenv local 3.10.14
 ```
 
 Run the following commands from the repository root (the parent directory of this
-`experiments` directory). `pyproject.toml` and `uv.lock` are the canonical dependency
-definitions. The locked sync installs the current MetricSifter checkout instead of a
-remote branch.
+`experiments` directory). PyRCA pins scikit-learn below 1.2, while the standard
+development environment uses a current scikit-learn release. Keep experiments in a
+separate Python 3.10 virtual environment; the `dev` and `experiments` extras are
+intentionally declared as conflicting.
 
 ```shell-session
-uv sync --locked --extra experiments --python 3.11
+uv venv --python 3.10 .venv-experiments
+uv pip install --python .venv-experiments/bin/python -e ".[experiments]"
 ```
 
 Only the localization experiments require PyRCA. It is not available on PyPI, so
-install its pinned revision into the synced environment when running those experiments:
+install its pinned revision into the experiment environment when running those experiments:
 
 ```shell-session
-uv pip install --python .venv/bin/python \
+uv pip install --python .venv-experiments/bin/python \
   "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
 ```
 
 For a pip-based setup, `experiments/requirements.txt` is intentionally a thin wrapper
-around the same project extra plus the pinned PyRCA revision. It must also be installed
-from the repository root so that `-e ".[experiments]"` refers to this checkout:
+around the same project extra plus the pinned PyRCA revision. Create another Python 3.10
+environment and install it from the repository root so that `-e ".[experiments]"` refers
+to this checkout:
 
 ```shell-session
-python -m pip install -r experiments/requirements.txt
+python3.10 -m venv .venv-experiments
+.venv-experiments/bin/python -m pip install -r experiments/requirements.txt
 ```
 
 ## Run experiment
@@ -59,7 +63,7 @@ synthetic reduction sweep and write its raw scores:
 
 ```shell-session
 cd experiments
-../.venv/bin/python - <<'PY'
+../.venv-experiments/bin/python - <<'PY'
 from dataset.loader import load_synthetic_data
 from sweeper.sweeper import sweep_reduction_on_synthetic
 

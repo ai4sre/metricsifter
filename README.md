@@ -44,24 +44,29 @@ uv pip install metricsifter
 git clone https://github.com/ai4sre/metricsifter.git
 cd metricsifter
 
-# Install the current checkout and all repository extras with uv (recommended)
-uv sync --all-extras
+# Install the current checkout and development dependencies with uv (recommended)
+uv sync --extra dev
 
 # Or using pip
 pip install -e ".[dev]"
 ```
 
-**For running experiments** (requires Python 3.10 or 3.11):
+**For running experiments** (use a separate Python 3.10 environment):
 
-From the repository root, install the current checkout with the experiment dependencies. The experiments also require
-`sfr-pyrca`, which must be installed separately because it is not available on PyPI:
+The pinned PyRCA revision requires scikit-learn 0.x or 1.0-1.1, whereas the development
+environment tests against current scikit-learn releases. The two extras are therefore
+intentionally incompatible and must not be installed into the same environment. From the
+repository root, create a separate Python 3.10 environment, install the current checkout
+with the experiment dependencies, then install the pinned PyRCA revision:
 
 ```bash
-# Use this checkout rather than a remote metricsifter branch
-python -m pip install -e ".[experiments]"
+# Keep experiment dependencies separate from the standard .venv
+uv venv --python 3.10 .venv-experiments
+uv pip install --python .venv-experiments/bin/python -e ".[experiments]"
 
-# Install the pinned sfr-pyrca revision (Python 3.10 or 3.11 only)
-python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
+# Install the pinned sfr-pyrca revision
+uv pip install --python .venv-experiments/bin/python \
+  "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
 ```
 
 ## Getting Started
@@ -325,14 +330,14 @@ arguments).
 
 ```bash
 # Using uv (recommended)
-uv sync --all-extras
+uv sync --extra dev
 
 # Or using pip
 pip install -e ".[dev]"
 
-# For experiments, run these commands from the repository root (Python 3.10 or 3.11 only)
-python -m pip install -e ".[dev,experiments]"
-python -m pip install "sfr-pyrca @ git+https://github.com/salesforce/PyRCA@d85512b"
+# Experiments use a separate Python 3.10 environment; see experiments/README.md.
+uv venv --python 3.10 .venv-experiments
+uv pip install --python .venv-experiments/bin/python -r experiments/requirements.txt
 ```
 
 ### Run Tests
