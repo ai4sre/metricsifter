@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Setup
-uv sync --all-extras
+uv sync --extra dev
 
 # Test (all)
 uv run pytest -s -vv tests
@@ -34,10 +34,10 @@ Core package (`metricsifter/`) implements a 3-phase pipeline in `Sifter`:
 2. **Change Point Detection** (`algo/detection.py`) — per-metric CPD using ruptures library
 3. **KDE Segmentation** (`algo/segmentation.py`) — clusters change points via KDE, selects densest segment
 
-`experiments/` is a **separate** research evaluation framework for the paper — not part of the published package. It has its own dependencies and only works on Python 3.10-3.11.
+`experiments/` is a **separate** research evaluation framework for the paper — not part of the published package. It uses a separate Python 3.10 environment because its pinned PyRCA dependency requires scikit-learn below 1.2.
 
 ## Gotchas
 
-- CI runs full test suite on Python 3.10 and 3.11 only. Python 3.12-3.14 only verify that `import metricsifter` succeeds.
-- `experiments/` requires `sfr-pyrca`, which is not on PyPI: `pip install git+https://github.com/salesforce/PyRCA@d85512b`
-- Tests generate synthetic data at runtime via `tests/sample_gen/generator.py` — no fixture files to manage.
+- CI runs the full test suite on Python 3.10-3.14.
+- `experiments/` requires the pinned `sfr-pyrca` revision, which is not on PyPI. The `dev` and `experiments` extras conflict by design and must use separate environments.
+- Tests generate deterministic synthetic data at runtime via fixtures in `tests/conftest.py` — no fixture files to manage.

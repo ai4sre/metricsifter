@@ -15,6 +15,7 @@ class Reducer(ABC):
     def run(self) -> pd.DataFrame:
         raise NotImplementedError
 
+
 class NormalityReducer(Reducer):
     def __init__(self, data: pd.DataFrame, n_jobs: int = 1, **kwargs: str | int | float):
         super().__init__(data, n_jobs, **kwargs)

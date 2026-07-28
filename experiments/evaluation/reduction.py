@@ -1,4 +1,3 @@
-
 def scores_of_synthetic(
     pred_anomalous_metrics: set[str],
     true_root_fault_metrics: set[str],
@@ -10,8 +9,16 @@ def scores_of_synthetic(
     pred_normal_metrics = total_metrics - pred_anomalous_metrics
 
     root_fault_recall = len(pred_anomalous_metrics & true_root_fault_metrics) / len(true_root_fault_metrics)
-    recall = (len(pred_anomalous_metrics & true_anomalous_metrics) / len(true_anomalous_metrics)) if len(true_anomalous_metrics) > 0 else 0.0
-    specificity = len(pred_normal_metrics & true_normal_metrics) / len(true_normal_metrics) if len(true_normal_metrics) > 0 else 0.0
+    recall = (
+        (len(pred_anomalous_metrics & true_anomalous_metrics) / len(true_anomalous_metrics))
+        if len(true_anomalous_metrics) > 0
+        else 0.0
+    )
+    specificity = (
+        len(pred_normal_metrics & true_normal_metrics) / len(true_normal_metrics)
+        if len(true_normal_metrics) > 0
+        else 0.0
+    )
     bacc = (recall + specificity) / 2
 
     return {
@@ -34,7 +41,11 @@ def scores_of_empirical(
     pred_normal_metrics = total_metrics - pred_anomalous_metrics
 
     root_fault_recall = len(pred_anomalous_metrics & true_root_fault_metrics) / len(true_root_fault_metrics)
-    specificity = len(pred_normal_metrics & true_normal_metrics) / len(true_normal_metrics) if len(true_normal_metrics) > 0 else 0.0
+    specificity = (
+        len(pred_normal_metrics & true_normal_metrics) / len(true_normal_metrics)
+        if len(true_normal_metrics) > 0
+        else 0.0
+    )
     bacc = (root_fault_recall + specificity) / 2
 
     return {

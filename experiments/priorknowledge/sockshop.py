@@ -131,7 +131,6 @@ DIAGNOSER_TARGET_DATA: Final[dict[str, list[str]]] = {
 }
 
 
-
 class SockShopKnowledge(PriorKnowledge):
     def __init__(self, target_metric_types: dict[str, bool]) -> None:
         super().__init__(target_metric_types)

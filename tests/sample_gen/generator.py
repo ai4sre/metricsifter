@@ -10,13 +10,14 @@ def generate_synthetic_data(
     num_normal_samples: int,
     num_abnormal_samples: int,
     anomaly_type: int,
-    func_type: str = 'identity',
-    noise_type: str = 'uniform',
-    weight_generator: str = 'uniform',
-) -> tuple[pd.DataFrame, pd.DataFrame, list[str], pd.DataFrame, set[str]] | tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str], pd.DataFrame]:
-    graph_matrix = data_gen.DAGGen(
-        data_gen.DAGGenConfig(num_node=num_node, num_edge=num_edge)
-    ).gen()
+    func_type: str = "identity",
+    noise_type: str = "uniform",
+    weight_generator: str = "uniform",
+) -> (
+    tuple[pd.DataFrame, pd.DataFrame, list[str], pd.DataFrame, set[str]]
+    | tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str], pd.DataFrame]
+):
+    graph_matrix = data_gen.DAGGen(data_gen.DAGGenConfig(num_node=num_node, num_edge=num_edge)).gen()
     G = nx.DiGraph(graph_matrix)
 
     # transform node names from 0 to N-1 to X1 to XN

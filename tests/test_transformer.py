@@ -96,16 +96,8 @@ class TestParams:
 
 
 def _import_sklearn_or_skip(module: str):
-    """importorskip that also tolerates binary-incompatibility failures.
-
-    On CI for Python 3.10/3.11 the PyRCA install changes the numpy version
-    underneath the prebuilt scikit-learn wheel, which then fails to import
-    with ValueError ("numpy.dtype size changed") rather than ImportError.
-    """
-    try:
-        return pytest.importorskip(module)
-    except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"scikit-learn unusable in this environment: {exc}")
+    """Import a scikit-learn module, skipping only when it is unavailable."""
+    return pytest.importorskip(module)
 
 
 class TestSklearnIntegration:

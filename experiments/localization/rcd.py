@@ -1,6 +1,12 @@
 import warnings
+from collections import defaultdict
 
+import joblib
 import pandas as pd
+from pyrca.analyzers.rcd import RCD, RCDConfig
+from pyrca.thirdparty.causallearn.utils.cit import gsq
+from scipy.stats import zscore
+from threadpoolctl import threadpool_limits
 
 
 def run_rcd(data_df: pd.DataFrame, boundary_index: int, top_k: int, n_iters: int) -> list[tuple[str, float]]:
@@ -12,7 +18,8 @@ def run_rcd(data_df: pd.DataFrame, boundary_index: int, top_k: int, n_iters: int
 
     def _run_rcd() -> list[dict]:
         with threadpool_limits(limits=1):
-            with warnings.catch_warnings(action='ignore', category=FutureWarning):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
                 return model.find_root_causes(normal_data_df, abnormal_data_df).to_list()
 
     if n_iters <= 1:

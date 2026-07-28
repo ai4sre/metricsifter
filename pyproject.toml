@@ -25,7 +25,6 @@ dependencies = [
     "joblib",
     "ruptures",
     "statsmodels",
-    "networkx",
 ]
 
 [project.urls]
@@ -43,16 +42,28 @@ dev = [
     "black",
     "ruff",
     "coverage",
+    "packaging",
     "pytest",
     "setuptools",
     "matplotlib>=3.7",
     "scikit-learn>=1.5",
+    "tomli; python_version < '3.11'",
 ]
 experiments = [
-    "pandas-stubs",
-    "scikit-learn>=1.5",
-    "hdbscan",
-    "threadpoolctl",
+    "numpy<2; python_version < '3.12'",
+    "pandas-stubs; python_version < '3.12'",
+    "scikit-learn>=0.24,<1.2; python_version < '3.12'",
+    "hdbscan; python_version < '3.12'",
+    "networkx; python_version < '3.12'",
+    "threadpoolctl; python_version < '3.12'",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "dev" },
+        { extra = "experiments" },
+    ],
 ]
 
 [tool.setuptools.packages.find]
@@ -63,7 +74,7 @@ metricsifter = ["py.typed"]
 
 [tool.black]
 line-length = 120
-target-version = ["py310", "py311", "py312", "py313"]
+target-version = ["py310", "py311", "py312", "py313", "py314"]
 
 [tool.ruff]
 line-length = 120

@@ -14,6 +14,9 @@ NO_CHANGE_POINTS: Final[int] = -1
 #: Noise-scale (``sigma``) estimators supported by :func:`detect_univariate_changepoints`.
 SIGMA_ESTIMATORS: Final[frozenset[str]] = frozenset({"std", "mad", "diff_std"})
 
+#: Change-point search algorithms supported by :func:`detect_univariate_changepoints`.
+SEARCH_METHODS: Final[frozenset[str]] = frozenset({"pelt", "binseg", "bottomup"})
+
 #: Candidate ``penalty_adjust`` multipliers swept by the ``"auto"`` plateau search.
 #: A geometric grid (step ``2**(1/3)``) so that relative penalty changes are uniform;
 #: the power-of-two anchors make 0.5, 1.0, 2.0 (the default), 4.0 and 8.0 exact.
@@ -93,6 +96,8 @@ def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
         output: [2 6 9]
     """
     is_nan = np.isnan(x)
+    if is_nan.size == 0:
+        return np.array([], dtype=int)
     # Get the index where NaN value changes
     nans = np.where(is_nan, 1, 0)
     change_indexes = np.where(np.diff(nans) == 1)[0] + 1
@@ -124,7 +129,13 @@ def _prepare_core(x: np.ndarray) -> tuple[np.ndarray | None, int]:
     return core, left
 
 
+def _validate_search_method(search_method: str) -> None:
+    if search_method not in SEARCH_METHODS:
+        raise ValueError(f"search_method={search_method} is not supported.")
+
+
 def _build_searcher(search_method: str, cost_model: str):
+    _validate_search_method(search_method)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         match search_method:
@@ -184,16 +195,20 @@ def detect_univariate_changepoints(
       as change points in their own right (see
       :func:`_detect_changepoints_with_missing_values`) and unioned with the
       detector output, because a metric that stops reporting is itself a signal.
+    * Empty and constant observed series return no detector change points. This
+      also avoids passing a zero penalty to search methods that require a
+      strictly positive value.
 
-    For inputs without any NaN this function is behaviorally identical to the
-    original implementation (no trimming, ``core == x``, ``nanstd == std``).
+    Nonconstant inputs without NaN retain the original detection path (no
+    trimming, ``core == x``, ``nanstd == std``).
     """
+    _validate_search_method(search_method)
     missing_value_cps = {int(i) for i in _detect_changepoints_with_missing_values(x)}
 
     core, left = _prepare_core(x)
-    if core is None or core.size < 2:
+    if core is None or core.size < 2 or (core == core[0]).all():
         # All-NaN input, or too short after trimming (KernelCPD needs min_size=2
-        # samples); only the missing-value boundaries remain.
+        # samples), or a constant observed signal; only missing-value boundaries remain.
         return sorted(missing_value_cps)
 
     searcher = _build_searcher(search_method, cost_model)
@@ -268,10 +283,11 @@ def _univariate_penalty_path(
     separately because they are penalty-invariant: including them in the
     plateau comparison would inflate every adjacent similarity toward 1.
     """
+    _validate_search_method(search_method)
     missing_value_cps = sorted({int(i) for i in _detect_changepoints_with_missing_values(x)})
 
     core, left = _prepare_core(x)
-    if core is None or core.size < 2:
+    if core is None or core.size < 2 or (core == core[0]).all():
         return [[] for _ in penalty_adjust_grid], missing_value_cps
 
     searcher = _build_searcher(search_method, cost_model)
