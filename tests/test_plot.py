@@ -19,6 +19,19 @@ from metricsifter import SegmentInfo, Sifter, SiftResult, plot  # noqa: E402
 from tests.conftest import make_synthetic  # noqa: E402
 
 
+def _handbuilt_result(selected_metrics: frozenset[str], segment: SegmentInfo | None) -> SiftResult:
+    """A SiftResult without change points, selecting ``selected_metrics`` and ``segment``."""
+    return SiftResult(
+        data=None,
+        selected_metrics=selected_metrics,
+        filtered_no_change=frozenset(),
+        filtered_no_change_points=frozenset(),
+        filtered_out_of_segment=frozenset(),
+        segments=[] if segment is None else [segment],
+        selected_segment=segment,
+    )
+
+
 @pytest.fixture
 def result_and_data():
     data = make_synthetic()
@@ -121,6 +134,29 @@ class TestPlotSiftedMetrics:
             # Data-x extent of the band (a Rectangle or a Polygon, by matplotlib version).
             xs = band.get_patch_transform().transform(band.get_path().vertices)[:, 0]
             assert (xs.min(), xs.max()) == (2.0, 5.0)
+
+    def test_series_and_legend_follow_column_order(self):
+        columns = ["zeta", "alpha", "mid", "beta"]
+        data = pd.DataFrame({column: np.arange(10.0) * (i + 1) for i, column in enumerate(columns)})
+        result = _handbuilt_result(frozenset({"zeta", "beta", "alpha"}), segment=None)
+        fig = plot.plot_sifted_metrics(result, data)
+        ax_before, ax_after = fig.axes
+
+        assert [list(ln.get_ydata()) for ln in ax_before.lines] == [list(data[c]) for c in columns]
+        # Column order, not name order.
+        expected = ["zeta", "alpha", "beta"]
+        assert [ln.get_label() for ln in ax_after.lines] == expected
+        assert [list(ln.get_ydata()) for ln in ax_after.lines] == [list(data[c]) for c in expected]
+        assert [t.get_text() for t in ax_after.get_legend().get_texts()] == expected
+
+    @pytest.mark.parametrize("start, end", [(-1, 4), (2, -1), (-3, -1)])
+    def test_segment_with_a_negative_index_is_not_shaded(self, start, end):
+        data = pd.DataFrame({"a": np.arange(10.0)})
+        segment = SegmentInfo(label=0, metrics=frozenset({"a"}), start_index=start, end_index=end, selected=True)
+        fig = plot.plot_sifted_metrics(_handbuilt_result(frozenset({"a"}), segment), data)
+
+        # A negative index would wrap around to the end of the axis instead of being skipped.
+        assert [len(ax.patches) for ax in fig.axes] == [0, 0]
 
 
 class TestPlotChangePointDensity:

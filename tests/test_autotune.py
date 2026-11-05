@@ -17,6 +17,7 @@ from metricsifter import Sifter, SifterTransformer
 from metricsifter.algo.detection import (
     PENALTY_ADJUST_FALLBACK,
     PENALTY_ADJUST_GRID,
+    PLATEAU_JACCARD_THRESHOLD,
     _univariate_penalty_path,
     detect_univariate_changepoints,
     select_penalty_adjust,
@@ -166,6 +167,48 @@ class TestPenaltyPlateauSelection:
         )
         assert diag["plateau"] == (1.0, 4.0)
         assert resolved == 2.0
+
+    def test_similarity_exactly_at_the_threshold_extends_the_plateau(self):
+        grid = (1.0, 2.0, 3.0)
+        cps = list(range(0, 100, 10))
+        # grid[1] -> grid[2] keeps 9 of 10 change points: Jaccard 9/10 == 0.9 exactly.
+        paths = [[cps, cps, cps[:9]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["adjacent_jaccard"] == [1.0, 0.9]
+        assert diag["adjacent_jaccard"][1] == PLATEAU_JACCARD_THRESHOLD
+        assert diag["plateau"] == (1.0, 3.0)
+        assert resolved == 2.0
+
+    def test_tie_break_uses_the_lower_midpoint_of_an_even_span(self):
+        # Two width-1 plateaus, grid[0..1] and grid[3..4]. Their lower midpoints
+        # (0.5 vs 2.5) favour the second; their upper ones (1.9 vs 4.0) would favour the first.
+        grid = (0.5, 1.9, 2.0, 2.5, 4.0)
+        paths = [[[10], [10], [50], [80], [80]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["plateau"] == (2.5, 4.0)
+        assert resolved == 2.5
+
+    @pytest.mark.parametrize("threshold", [0.0, -1.0])
+    def test_plateau_never_starts_at_an_empty_grid_point(self, threshold):
+        grid = (1.0, 2.0, 3.0, 4.0)
+        # Nothing is detected at grid[0]; with threshold <= 0 every pair passes the
+        # similarity test, so only the non-empty guard keeps grid[0] out.
+        paths = [[[], [10], [10], [50]]]
+        resolved, diag = select_penalty_adjust(
+            paths, series_length=100, penalty_adjust_grid=grid, plateau_threshold=threshold
+        )
+        assert diag["adjacent_jaccard"] == [0.0, 1.0, 0.0]
+        assert diag["plateau"] == (2.0, 4.0)
+        assert resolved == 3.0
+
+    def test_empty_to_empty_pairs_report_full_similarity(self):
+        grid = (1.0, 2.0, 3.0, 4.0)
+        paths = [[[10], [], [], [10]], [[50], [], [], []]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        # An empty -> empty pair has an empty union and counts as identical.
+        assert diag["adjacent_jaccard"] == [0.0, 1.0, 0.0]
+        assert diag["reason"] == "no_plateau"
+        assert resolved == PENALTY_ADJUST_FALLBACK
 
 
 class TestPenaltyPath:
@@ -438,6 +481,72 @@ class TestBandwidthSelectionUnit:
             random_state=rng,
         )
         assert rng.bit_generator.state == state
+
+    def test_metric_insertion_order_does_not_change_the_result(self):
+        base = {
+            "a_0": [20],
+            "a_1": [21],
+            "a_2": [20, 60],
+            "b_0": [60],
+            "b_1": [61],
+            "b_2": [62],
+            "b_3": [60, 90],
+            "c_0": [40],
+            "c_1": [41, 90],
+        }
+        orders = [
+            sorted(base),
+            sorted(base, reverse=True),
+            ["b_2", "a_1", "c_1", "b_0", "a_2", "c_0", "b_3", "a_0", "b_1"],
+        ]
+        selector = Sifter(n_jobs=1).select_largest_segment_with_label
+
+        outcomes = []
+        for order in orders:
+            metric_to_cps = {metric: base[metric] for metric in order}
+            flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+            rng = np.random.default_rng(5)
+            result = select_bandwidth(
+                flatten, cp_to_metrics, metric_to_cps, time_series_length=100, selector=selector, random_state=rng
+            )
+            outcomes.append((result, rng.bit_generator.state))
+
+        # Resamples index the metrics in name order, whatever order the columns came in.
+        assert outcomes[0][0][1]["reason"] == "stability"
+        assert outcomes[1] == outcomes[0]
+        assert outcomes[2] == outcomes[0]
+
+    def test_selector_receives_the_resample_segmentation(self):
+        metric_to_cps = {f"a_{i}": [20 + i] for i in range(3)} | {f"b_{i}": [60 + i] for i in range(5)}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+        chosen = []
+
+        def latest_segment(l2m, m2cps, l2cp):
+            # The third argument is the resample's own segmentation: every
+            # segment's metrics changed at one of that segment's change points.
+            assert set(l2m) <= set(l2cp)
+            for label, metrics in l2m.items():
+                positions = {int(cp) for cp in l2cp[label]}
+                assert all(positions & set(m2cps[metric]) for metric in metrics)
+            label = max(l2m, key=lambda lb: max(l2cp[lb]))
+            chosen.append(label)
+            return label, l2m[label]
+
+        resolved, diag = select_bandwidth(
+            flatten,
+            cp_to_metrics,
+            metric_to_cps,
+            time_series_length=100,
+            selector=latest_segment,
+            random_state=0,
+            n_bootstrap=4,
+            grid=[1.0, 100.0],
+        )
+
+        assert len(chosen) == 4
+        assert diag["stability"][1] is None
+        assert diag["stability"][0] is not None
+        assert resolved == 1.0
 
 
 class TestSerializationAndIntegration:
