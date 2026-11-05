@@ -20,7 +20,7 @@ black .
 # Lint
 ruff check .
 
-# Complexity ranking (needs cccc, https://github.com/moznion/cccc; settings in cccc.toml)
+# Complexity ranking (needs cccc, https://github.com/moznion/cccc; fails above max-cognitive in cccc.toml)
 cccc --table --top-cognitive 20 .
 ```
 
