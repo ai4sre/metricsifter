@@ -208,6 +208,20 @@ class BandwidthTuning:
         )
 
 
+def _change_times_to_dict(
+    metric_to_change_times: dict[str, list[pd.Timestamp]] | None,
+) -> dict[str, list[str]] | None:
+    """Serialize per-metric change times as ISO 8601 strings (``None`` stays ``None``)."""
+    if metric_to_change_times is None:
+        return None
+    return {metric: [t.isoformat() for t in times] for metric, times in metric_to_change_times.items()}
+
+
+def _optional_to_dict(report: SegmentInfo | PenaltyTuning | BandwidthTuning | None) -> dict | None:
+    """Serialize an optional report via its ``to_dict`` (``None`` stays ``None``)."""
+    return report.to_dict() if report is not None else None
+
+
 @dataclass
 class SiftResult:
     """Diagnostic, explainable result of :meth:`metricsifter.sifter.Sifter.sift`.
@@ -266,15 +280,11 @@ class SiftResult:
             "metric_to_change_points": {
                 metric: [int(cp) for cp in cps] for metric, cps in self.metric_to_change_points.items()
             },
-            "metric_to_change_times": (
-                {metric: [t.isoformat() for t in times] for metric, times in self.metric_to_change_times.items()}
-                if self.metric_to_change_times is not None
-                else None
-            ),
+            "metric_to_change_times": _change_times_to_dict(self.metric_to_change_times),
             "segments": [segment.to_dict() for segment in self.segments],
-            "selected_segment": self.selected_segment.to_dict() if self.selected_segment is not None else None,
-            "penalty_tuning": self.penalty_tuning.to_dict() if self.penalty_tuning is not None else None,
-            "bandwidth_tuning": self.bandwidth_tuning.to_dict() if self.bandwidth_tuning is not None else None,
+            "selected_segment": _optional_to_dict(self.selected_segment),
+            "penalty_tuning": _optional_to_dict(self.penalty_tuning),
+            "bandwidth_tuning": _optional_to_dict(self.bandwidth_tuning),
         }
 
     def to_json(self, **kwargs) -> str:

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 from metricsifter.algo import segmentation
-from metricsifter.types import SiftResult
+from metricsifter.types import SegmentInfo, SiftResult
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from matplotlib.axes import Axes
@@ -58,6 +58,40 @@ def _flatten_change_points(result: SiftResult) -> list[int]:
     return sorted(positions)
 
 
+def _plot_before_panel(ax: "Axes", x: pd.Index, original_data: pd.DataFrame) -> None:
+    """Draw every input metric on the "before" panel."""
+    for column in original_data.columns:
+        ax.plot(x, original_data[column].to_numpy(), linewidth=0.8, alpha=0.7)
+    ax.set_title(f"Before sift ({original_data.shape[1]} metrics)")
+
+
+def _plot_after_panel(ax: "Axes", x: pd.Index, original_data: pd.DataFrame, selected_metrics: frozenset[str]) -> None:
+    """Draw only the selected metrics, labeled, on the "after" panel."""
+    selected = [c for c in original_data.columns if c in selected_metrics]
+    for column in selected:
+        ax.plot(x, original_data[column].to_numpy(), linewidth=1.0, label=str(column))
+    ax.set_title(f"After sift ({len(selected)} metrics)")
+    if selected:
+        ax.legend(loc="upper left", fontsize="small")
+
+
+def _mark_change_points(ax: "Axes", x: pd.Index, positions: list[int]) -> None:
+    """Draw a vertical marker line at each change point that lies on the x-axis."""
+    for pos in positions:
+        if 0 <= pos < len(x):
+            ax.axvline(x[pos], color="tab:red", linestyle="--", linewidth=0.6, alpha=0.5)
+
+
+def _shade_selected_segment(ax: "Axes", x: pd.Index, segment: SegmentInfo | None) -> None:
+    """Shade the selected segment's range, when there is one and it lies on the x-axis."""
+    if segment is None:
+        return
+    start = segment.start_index
+    end = segment.end_index
+    if 0 <= start < len(x) and 0 <= end < len(x):
+        ax.axvspan(x[start], x[end], color="tab:orange", alpha=0.2)
+
+
 def plot_sifted_metrics(
     result: SiftResult,
     original_data: pd.DataFrame,
@@ -84,28 +118,14 @@ def plot_sifted_metrics(
     fig, (ax_before, ax_after) = plt.subplots(2, 1, figsize=figsize, sharex=True)
 
     x = original_data.index
-    for column in original_data.columns:
-        ax_before.plot(x, original_data[column].to_numpy(), linewidth=0.8, alpha=0.7)
-    ax_before.set_title(f"Before sift ({original_data.shape[1]} metrics)")
-
-    selected = [c for c in original_data.columns if c in result.selected_metrics]
-    for column in selected:
-        ax_after.plot(x, original_data[column].to_numpy(), linewidth=1.0, label=str(column))
-    ax_after.set_title(f"After sift ({len(selected)} metrics)")
-    if selected:
-        ax_after.legend(loc="upper left", fontsize="small")
+    _plot_before_panel(ax_before, x, original_data)
+    _plot_after_panel(ax_after, x, original_data, result.selected_metrics)
 
     # Change-point markers and the selected-segment band, on both panels.
     positions = _change_point_positions(result)
     for ax in (ax_before, ax_after):
-        for pos in positions:
-            if 0 <= pos < len(x):
-                ax.axvline(x[pos], color="tab:red", linestyle="--", linewidth=0.6, alpha=0.5)
-        if result.selected_segment is not None:
-            start = result.selected_segment.start_index
-            end = result.selected_segment.end_index
-            if 0 <= start < len(x) and 0 <= end < len(x):
-                ax.axvspan(x[start], x[end], color="tab:orange", alpha=0.2)
+        _mark_change_points(ax, x, positions)
+        _shade_selected_segment(ax, x, result.selected_segment)
 
     ax_after.set_xlabel("time")
     fig.tight_layout()

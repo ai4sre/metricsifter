@@ -113,6 +113,60 @@ class TestPenaltyPlateauSelection:
         assert diag["plateau"] == (grid[0], grid[-1])
         assert all(j == 1.0 for j in diag["adjacent_jaccard"])
 
+    def test_wider_plateau_beats_one_closer_to_default(self):
+        grid = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0)
+        # grid[0..1] is a narrow plateau around the default; grid[3..7] is wider.
+        paths = [[[10], [10], [50], [80], [80], [80], [80], [80]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["reason"] == "plateau"
+        assert diag["plateau"] == (4.0, 8.0)
+        assert resolved == 6.0
+
+    def test_equal_width_prefers_midpoint_closest_to_default(self):
+        grid = (0.25, 0.5, 1.0, 1.5, 2.0, 2.5)
+        # Two width-1 plateaus: grid[0..1] (midpoint 0.25) then grid[3..4] (midpoint 1.5).
+        paths = [[[10], [10], [50], [80], [80], [30]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["plateau"] == (1.5, 2.0)
+        assert resolved == 1.5
+
+    def test_later_plateau_farther_from_default_does_not_replace(self):
+        grid = (1.5, 2.0, 2.5, 3.0, 3.5, 4.0)
+        # grid[0..1] (midpoint 1.5) wins over the equally wide grid[3..4] (midpoint 3.0).
+        paths = [[[10], [10], [50], [80], [80], [30]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["plateau"] == (1.5, 2.0)
+        assert resolved == 1.5
+
+    def test_exact_tie_keeps_the_earlier_plateau(self):
+        grid = (1.0, 1.0, 2.0, 3.0, 3.0)
+        # Both plateaus have width 1 and a midpoint 1.0 away from the default.
+        paths = [[[10], [10], [50], [80], [80]]]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["plateau"] == (1.0, 1.0)
+        assert resolved == 1.0
+
+    def test_threshold_and_counts_bound_the_plateau(self):
+        grid = (1.0, 2.0, 3.0, 4.0, 5.0)
+        # Two metrics; at grid[3] one of them loses its change point, so the
+        # grid[2]->grid[3] similarity drops to 2/3 and the plateau ends at grid[2].
+        paths = [
+            [[10, 40], [10, 40], [10, 40], [10], []],
+            [[60], [60], [60], [60], []],
+        ]
+        resolved, diag = select_penalty_adjust(paths, series_length=100, penalty_adjust_grid=grid)
+        assert diag["n_change_points"] == [3, 3, 3, 2, 0]
+        assert diag["adjacent_jaccard"] == [1.0, 1.0, 2 / 3, 0.0]
+        assert diag["plateau"] == (1.0, 3.0)
+        assert resolved == 2.0
+
+        # Even a zero threshold extends it only up to the empty tail.
+        resolved, diag = select_penalty_adjust(
+            paths, series_length=100, penalty_adjust_grid=grid, plateau_threshold=0.0
+        )
+        assert diag["plateau"] == (1.0, 4.0)
+        assert resolved == 2.0
+
 
 class TestPenaltyPath:
     def test_path_matches_direct_detection(self):
@@ -256,6 +310,134 @@ class TestBandwidthSelectionUnit:
         assert diag["reason"] == "stability"
         assert any(n >= 2 for n in diag["n_segments"])
         assert resolved in diag["grid"]
+
+    @staticmethod
+    def _aggregates(metric_to_cps: dict[str, list[int]]) -> tuple[list[int], dict[int, list[str]]]:
+        flatten = [cp for cps in metric_to_cps.values() for cp in cps]
+        cp_to_metrics: dict[int, list[str]] = {}
+        for metric, cps in metric_to_cps.items():
+            for cp in cps:
+                cp_to_metrics.setdefault(cp, []).append(metric)
+        return flatten, cp_to_metrics
+
+    def test_unimodal_change_points_fall_back(self):
+        metric_to_cps = {"a": [49], "b": [50], "c": [51]}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+        calls = []
+
+        def selector(l2m, m2cps, l2cp):
+            calls.append(l2m)
+            return 0, set()
+
+        grid = [1.0, 5.0, 50.0]
+        resolved, diag = select_bandwidth(
+            flatten, cp_to_metrics, metric_to_cps, time_series_length=100, selector=selector, random_state=0, grid=grid
+        )
+
+        assert resolved == BANDWIDTH_FALLBACK
+        assert diag == {"grid": grid, "stability": [None, None, None], "n_segments": [1, 1, 1], "reason": "unimodal"}
+        assert diag["grid"] is not grid
+        # Inadmissible candidates never run the bootstrap.
+        assert calls == []
+
+    def test_inadmissible_candidates_are_skipped_in_a_mixed_grid(self):
+        metric_to_cps = {f"a_{i}": [20] for i in range(3)} | {f"b_{i}": [60 + i] for i in range(6)}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+        calls = []
+
+        def selector(l2m, m2cps, l2cp):
+            calls.append(l2m)
+            assert m2cps is metric_to_cps
+            return 0, {"b_0"}
+
+        resolved, diag = select_bandwidth(
+            flatten,
+            cp_to_metrics,
+            metric_to_cps,
+            time_series_length=100,
+            selector=selector,
+            random_state=0,
+            n_bootstrap=4,
+            grid=[100.0, 1.0],
+        )
+
+        assert diag["n_segments"] == [1, 2]
+        assert diag["stability"] == [None, 1.0]
+        assert diag["reason"] == "stability"
+        assert resolved == 1.0
+        # Only the admissible candidate is bootstrapped, once per resample.
+        assert len(calls) == 4
+
+    def test_ties_prefer_the_smaller_bandwidth(self):
+        metric_to_cps = {f"a_{i}": [20] for i in range(3)} | {f"b_{i}": [60 + i] for i in range(6)}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+
+        # A constant selection is perfectly stable at every admissible bandwidth.
+        resolved, diag = select_bandwidth(
+            flatten,
+            cp_to_metrics,
+            metric_to_cps,
+            time_series_length=100,
+            selector=lambda l2m, m2cps, l2cp: (0, {"x"}),
+            random_state=0,
+            grid=[4.0, 1.0, 2.0],
+        )
+
+        assert diag["stability"] == [1.0, 1.0, 1.0]
+        assert resolved == 1.0
+
+    def test_metrics_without_change_points_do_not_perturb_the_bootstrap(self):
+        metric_to_cps = {f"a_{i}": [20 + i] for i in range(3)} | {f"b_{i}": [60 + i, 70] for i in range(5)}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+        selector = Sifter(n_jobs=1).select_largest_segment_with_label
+
+        baseline = select_bandwidth(
+            flatten, cp_to_metrics, metric_to_cps, time_series_length=100, selector=selector, random_state=3
+        )
+        with_silent = select_bandwidth(
+            flatten,
+            cp_to_metrics,
+            {"silent": [], **metric_to_cps},
+            time_series_length=100,
+            selector=selector,
+            random_state=3,
+        )
+
+        assert with_silent == baseline
+
+    def test_bootstrap_consumes_the_generator_once_per_resample(self):
+        metric_to_cps = {f"a_{i}": [20] for i in range(3)} | {f"b_{i}": [60 + i] for i in range(6)}
+        flatten, cp_to_metrics = self._aggregates(metric_to_cps)
+        rng = np.random.default_rng(11)
+        expected = np.random.default_rng(11)
+
+        select_bandwidth(
+            flatten,
+            cp_to_metrics,
+            metric_to_cps,
+            time_series_length=100,
+            selector=lambda l2m, m2cps, l2cp: (0, set()),
+            random_state=rng,
+            n_bootstrap=5,
+        )
+
+        # One draw of n_metrics indices per resample, shared by every candidate.
+        for _ in range(5):
+            expected.integers(0, len(metric_to_cps), size=len(metric_to_cps))
+        assert rng.bit_generator.state == expected.bit_generator.state
+
+    def test_too_few_change_points_do_not_consume_the_generator(self):
+        rng = np.random.default_rng(11)
+        state = rng.bit_generator.state
+        select_bandwidth(
+            flatten_change_points=[50, 50, 60],
+            cp_to_metrics={50: ["a", "b"], 60: ["a"]},
+            metric_to_cps={"a": [50, 60], "b": [50]},
+            time_series_length=100,
+            selector=lambda l2m, m2cps, l2cp: (0, set()),
+            random_state=rng,
+        )
+        assert rng.bit_generator.state == state
 
 
 class TestSerializationAndIntegration:

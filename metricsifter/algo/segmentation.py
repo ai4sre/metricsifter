@@ -148,6 +148,49 @@ def _mean_pairwise_jaccard(sets: list[frozenset[str]]) -> float:
     return total / n_pairs if n_pairs else 1.0
 
 
+def _draw_bootstrap_indices(
+    metric_to_cps: dict[str, list[int]], n_bootstrap: int, random_state: int | None
+) -> tuple[list[str], list[np.ndarray]]:
+    """Sorted metrics with change points, and ``n_bootstrap`` resamples of their indices."""
+    metrics = sorted(metric for metric, cps in metric_to_cps.items() if len(cps) > 0)
+    n_metrics = len(metrics)
+    rng = np.random.default_rng(random_state)
+    # One shared set of resample indices for every candidate bandwidth.
+    bootstrap_indices = [rng.integers(0, n_metrics, size=n_metrics) for _ in range(n_bootstrap)]
+    return metrics, bootstrap_indices
+
+
+def _count_segments(
+    flatten_change_points: list[int], cp_to_metrics: dict[int, list[str]], time_series_length: int, h: float
+) -> int:
+    """Number of non-empty segments the full data yields at bandwidth ``h``."""
+    _, label_to_cps = segment_nested_changepoints(
+        flatten_change_points, cp_to_metrics, time_series_length, kde_bandwidth=h
+    )
+    return sum(1 for cps in label_to_cps.values() if len(cps) > 0)
+
+
+def _bootstrap_stability(
+    metrics: list[str],
+    bootstrap_indices: list[np.ndarray],
+    metric_to_cps: dict[str, list[int]],
+    time_series_length: int,
+    h: float,
+    selector: Callable[[dict[int, set[str]], dict[str, list[int]], dict[int, npt.NDArray]], tuple],
+) -> float:
+    """Mean pairwise Jaccard of the metrics ``selector`` picks across the resamples, at bandwidth ``h``."""
+    selected_sets: list[frozenset[str]] = []
+    for indices in bootstrap_indices:
+        sampled = [metrics[i] for i in indices]
+        flatten_b, cp_to_metrics_b = _rebuild_aggregates(sampled, metric_to_cps)
+        label_to_metrics_b, label_to_cps_b = segment_nested_changepoints(
+            flatten_b, cp_to_metrics_b, time_series_length, kde_bandwidth=h
+        )
+        _, selected = selector(label_to_metrics_b, metric_to_cps, label_to_cps_b)
+        selected_sets.append(frozenset(selected))
+    return _mean_pairwise_jaccard(selected_sets)
+
+
 def select_bandwidth(
     flatten_change_points: list[int],
     cp_to_metrics: dict[int, list[str]],
@@ -204,35 +247,19 @@ def select_bandwidth(
         }
 
     grid = grid if grid is not None else _bandwidth_grid(time_series_length)
-    metrics = sorted(metric for metric, cps in metric_to_cps.items() if len(cps) > 0)
-    n_metrics = len(metrics)
-    rng = np.random.default_rng(random_state)
-    # One shared set of resample indices for every candidate bandwidth.
-    bootstrap_indices = [rng.integers(0, n_metrics, size=n_metrics) for _ in range(n_bootstrap)]
+    metrics, bootstrap_indices = _draw_bootstrap_indices(metric_to_cps, n_bootstrap, random_state)
 
     stability: list[float | None] = []
     n_segments: list[int] = []
     best: tuple[tuple[float, float], float] | None = None  # ((stab, -h), h)
     for h in grid:
-        _, label_to_cps_full = segment_nested_changepoints(
-            flatten_change_points, cp_to_metrics, time_series_length, kde_bandwidth=h
-        )
-        n_seg = sum(1 for cps in label_to_cps_full.values() if len(cps) > 0)
+        n_seg = _count_segments(flatten_change_points, cp_to_metrics, time_series_length, h)
         n_segments.append(n_seg)
         if n_seg < 2:
             stability.append(None)
             continue
 
-        selected_sets: list[frozenset[str]] = []
-        for indices in bootstrap_indices:
-            sampled = [metrics[i] for i in indices]
-            flatten_b, cp_to_metrics_b = _rebuild_aggregates(sampled, metric_to_cps)
-            label_to_metrics_b, label_to_cps_b = segment_nested_changepoints(
-                flatten_b, cp_to_metrics_b, time_series_length, kde_bandwidth=h
-            )
-            _, selected = selector(label_to_metrics_b, metric_to_cps, label_to_cps_b)
-            selected_sets.append(frozenset(selected))
-        score = _mean_pairwise_jaccard(selected_sets)
+        score = _bootstrap_stability(metrics, bootstrap_indices, metric_to_cps, time_series_length, h, selector)
         stability.append(score)
         candidate = ((score, -h), h)
         if best is None or candidate[0] > best[0]:
