@@ -296,43 +296,23 @@ class Sifter:
 
         filtered_no_change = frozenset(input_metrics) - frozenset(X.columns)
         index = X.index
-        has_datetime = isinstance(index, pd.DatetimeIndex)
 
         # STEP1: detect change points
         flatten_change_points, cp_to_metrics, metric_to_cps, penalty_tuning = self._detect_changepoints(X)
 
-        metric_to_change_points = {metric: [int(cp) for cp in cps] for metric, cps in metric_to_cps.items()}
+        metric_to_change_points = self._as_positions(metric_to_cps)
         filtered_no_change_points = frozenset(
             metric for metric, cps in metric_to_change_points.items() if len(cps) == 0
         )
-        metric_to_change_times = None
-        if has_datetime:
-            metric_to_change_times = {
-                metric: [index[cp] for cp in cps] for metric, cps in metric_to_change_points.items()
-            }
+        metric_to_change_times = self._as_times(index, metric_to_change_points)
 
         if not flatten_change_points:
-            # Return a fully empty DataFrame (no index) to preserve the legacy
-            # behavior of run() / run_with_selected_segment().
-            bandwidth_tuning = None
-            if self.bandwidth == AUTO:
-                bandwidth_tuning = BandwidthTuning(
-                    requested=self.bandwidth,
-                    resolved=segmentation.BANDWIDTH_FALLBACK,
-                    reason="no_change_points",
-                )
-            return SiftResult(
-                data=pd.DataFrame(),
-                selected_metrics=frozenset(),
-                filtered_no_change=filtered_no_change,
-                filtered_no_change_points=filtered_no_change_points,
-                filtered_out_of_segment=frozenset(),
-                metric_to_change_points=metric_to_change_points,
-                metric_to_change_times=metric_to_change_times,
-                segments=[],
-                selected_segment=None,
-                penalty_tuning=penalty_tuning,
-                bandwidth_tuning=bandwidth_tuning,
+            return self._no_change_point_result(
+                filtered_no_change,
+                filtered_no_change_points,
+                metric_to_change_points,
+                metric_to_change_times,
+                penalty_tuning,
             )
 
         # STEP2: segment change points (resolving bandwidth="auto" first)
@@ -350,7 +330,87 @@ class Sifter:
         selected_label, remained_metrics = self.select_largest_segment_with_label(
             cluster_label_to_metrics, metric_to_cps, label_to_change_points
         )
+        segments, selected_segment = self._build_segments(
+            index, cluster_label_to_metrics, metric_to_cps, label_to_change_points, selected_label
+        )
 
+        has_change_points = frozenset(metric for metric, cps in metric_to_change_points.items() if len(cps) > 0)
+        filtered_out_of_segment = has_change_points - frozenset(remained_metrics)
+
+        selected_columns = [c for c in X.columns if c in remained_metrics]
+        return SiftResult(
+            data=X[selected_columns],
+            selected_metrics=frozenset(remained_metrics),
+            filtered_no_change=filtered_no_change,
+            filtered_no_change_points=filtered_no_change_points,
+            filtered_out_of_segment=filtered_out_of_segment,
+            metric_to_change_points=metric_to_change_points,
+            metric_to_change_times=metric_to_change_times,
+            segments=segments,
+            selected_segment=selected_segment,
+            penalty_tuning=penalty_tuning,
+            bandwidth_tuning=bandwidth_tuning,
+        )
+
+    @staticmethod
+    def _as_positions(metric_to_cps: dict[str, list[int]]) -> dict[str, list[int]]:
+        """Per-metric change points as plain ``int`` row positions."""
+        return {metric: [int(cp) for cp in cps] for metric, cps in metric_to_cps.items()}
+
+    @staticmethod
+    def _as_times(
+        index: pd.Index, metric_to_change_points: dict[str, list[int]]
+    ) -> dict[str, list[pd.Timestamp]] | None:
+        """Per-metric change points as wall-clock times (``None`` unless ``index`` is a DatetimeIndex)."""
+        if not isinstance(index, pd.DatetimeIndex):
+            return None
+        return {metric: [index[cp] for cp in cps] for metric, cps in metric_to_change_points.items()}
+
+    def _no_change_point_result(
+        self,
+        filtered_no_change: frozenset[str],
+        filtered_no_change_points: frozenset[str],
+        metric_to_change_points: dict[str, list[int]],
+        metric_to_change_times: dict[str, list[pd.Timestamp]] | None,
+        penalty_tuning: PenaltyTuning | None,
+    ) -> SiftResult:
+        """Build the result of a sift in which no change point was detected."""
+        # Return a fully empty DataFrame (no index) to preserve the legacy
+        # behavior of run() / run_with_selected_segment().
+        bandwidth_tuning = None
+        if self.bandwidth == AUTO:
+            bandwidth_tuning = BandwidthTuning(
+                requested=self.bandwidth,
+                resolved=segmentation.BANDWIDTH_FALLBACK,
+                reason="no_change_points",
+            )
+        return SiftResult(
+            data=pd.DataFrame(),
+            selected_metrics=frozenset(),
+            filtered_no_change=filtered_no_change,
+            filtered_no_change_points=filtered_no_change_points,
+            filtered_out_of_segment=frozenset(),
+            metric_to_change_points=metric_to_change_points,
+            metric_to_change_times=metric_to_change_times,
+            segments=[],
+            selected_segment=None,
+            penalty_tuning=penalty_tuning,
+            bandwidth_tuning=bandwidth_tuning,
+        )
+
+    def _build_segments(
+        self,
+        index: pd.Index,
+        cluster_label_to_metrics: dict[int, set[str]],
+        metric_to_cps: dict[str, list[int]],
+        label_to_change_points: dict[int, np.ndarray],
+        selected_label: int | None,
+    ) -> tuple[list[SegmentInfo], SegmentInfo | None]:
+        """Describe every non-empty cluster as a scored :class:`SegmentInfo`, in label order.
+
+        Returns the segments and the selected one (``None`` if none is selected).
+        """
+        has_datetime = isinstance(index, pd.DatetimeIndex)
         segments: list[SegmentInfo] = []
         selected_segment: SegmentInfo | None = None
         for label, change_points in sorted(label_to_change_points.items()):
@@ -374,24 +434,7 @@ class Sifter:
             segments.append(segment)
             if segment.selected:
                 selected_segment = segment
-
-        has_change_points = frozenset(metric for metric, cps in metric_to_change_points.items() if len(cps) > 0)
-        filtered_out_of_segment = has_change_points - frozenset(remained_metrics)
-
-        selected_columns = [c for c in X.columns if c in remained_metrics]
-        return SiftResult(
-            data=X[selected_columns],
-            selected_metrics=frozenset(remained_metrics),
-            filtered_no_change=filtered_no_change,
-            filtered_no_change_points=filtered_no_change_points,
-            filtered_out_of_segment=filtered_out_of_segment,
-            metric_to_change_points=metric_to_change_points,
-            metric_to_change_times=metric_to_change_times,
-            segments=segments,
-            selected_segment=selected_segment,
-            penalty_tuning=penalty_tuning,
-            bandwidth_tuning=bandwidth_tuning,
-        )
+        return segments, selected_segment
 
     @staticmethod
     def _build_candidate(

@@ -363,38 +363,63 @@ def select_penalty_adjust(
     tolerance = max(1, round(0.01 * series_length))
 
     counts = [sum(len(path[g]) for path in paths) for g in range(n_grid)]
-    jaccards: list[float] = []
-    for g in range(n_grid - 1):
-        intersection = sum(_tolerant_matched_count(path[g], path[g + 1], tolerance) for path in paths)
-        union = counts[g] + counts[g + 1] - intersection
-        jaccards.append(intersection / union if union > 0 else 1.0)
+    jaccards = _adjacent_tolerant_jaccards(paths, counts, tolerance)
 
     diagnostics: dict = {"grid": grid, "n_change_points": counts, "adjacent_jaccard": jaccards}
 
-    best: tuple[int, float, int, int] | None = None  # (width, -|mid - 2.0|, start, end)
-    g = 0
-    while g < n_grid - 1:
-        if jaccards[g] >= plateau_threshold and counts[g] > 0 and counts[g + 1] > 0:
-            start = g
-            while g < n_grid - 1 and jaccards[g] >= plateau_threshold and counts[g] > 0 and counts[g + 1] > 0:
-                g += 1
-            end = g  # plateau spans grid[start..end] inclusive
-            midpoint = grid[(start + end) // 2]
-            candidate = (end - start, -abs(midpoint - PENALTY_ADJUST_FALLBACK), start, end)
-            if best is None or candidate[:2] > best[:2]:
-                best = candidate
-        else:
-            g += 1
-
-    if best is None:
+    plateau = _widest_plateau(grid, counts, jaccards, plateau_threshold)
+    if plateau is None:
         diagnostics["plateau"] = None
         diagnostics["reason"] = "no_plateau"
         return PENALTY_ADJUST_FALLBACK, diagnostics
 
-    _, _, start, end = best
+    start, end = plateau
     diagnostics["plateau"] = (grid[start], grid[end])
     diagnostics["reason"] = "plateau"
     return grid[(start + end) // 2], diagnostics
+
+
+def _adjacent_tolerant_jaccards(paths: list[list[list[int]]], counts: list[int], tolerance: int) -> list[float]:
+    """Tolerant Jaccard similarity of all metrics' change points between grid points ``g`` and ``g + 1``."""
+    jaccards: list[float] = []
+    for g in range(len(counts) - 1):
+        intersection = sum(_tolerant_matched_count(path[g], path[g + 1], tolerance) for path in paths)
+        union = counts[g] + counts[g + 1] - intersection
+        jaccards.append(intersection / union if union > 0 else 1.0)
+    return jaccards
+
+
+def _is_stable_pair(g: int, counts: list[int], jaccards: list[float], plateau_threshold: float) -> bool:
+    """Whether grid points ``g`` and ``g + 1`` are similar enough, with results on both sides."""
+    return jaccards[g] >= plateau_threshold and counts[g] > 0 and counts[g + 1] > 0
+
+
+def _plateau_end(start: int, counts: list[int], jaccards: list[float], plateau_threshold: float) -> int:
+    """Last grid index of the plateau whose first stable pair starts at ``start``."""
+    g = start
+    while g < len(jaccards) and _is_stable_pair(g, counts, jaccards, plateau_threshold):
+        g += 1
+    return g
+
+
+def _widest_plateau(
+    grid: list[float], counts: list[int], jaccards: list[float], plateau_threshold: float
+) -> tuple[int, int] | None:
+    """``(start, end)`` grid indices of the widest plateau (ties: midpoint closest to the default)."""
+    best: tuple[int, float, int, int] | None = None  # (width, -|mid - 2.0|, start, end)
+    g = 0
+    while g < len(jaccards):
+        if not _is_stable_pair(g, counts, jaccards, plateau_threshold):
+            g += 1
+            continue
+        start = g
+        end = _plateau_end(start, counts, jaccards, plateau_threshold)  # plateau spans grid[start..end] inclusive
+        g = end
+        midpoint = grid[(start + end) // 2]
+        candidate = (end - start, -abs(midpoint - PENALTY_ADJUST_FALLBACK), start, end)
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    return None if best is None else best[2:]
 
 
 def detect_multi_changepoints_with_penalty_tuning(

@@ -6,6 +6,8 @@ Rendering uses the non-interactive ``Agg`` backend so no display is required.
 import sys
 
 import matplotlib
+import numpy as np
+import pandas as pd
 import pytest
 
 matplotlib.use("Agg")
@@ -13,8 +15,21 @@ matplotlib.use("Agg")
 from matplotlib.axes import Axes  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
-from metricsifter import Sifter, plot  # noqa: E402
+from metricsifter import SegmentInfo, Sifter, SiftResult, plot  # noqa: E402
 from tests.conftest import make_synthetic  # noqa: E402
+
+
+def _handbuilt_result(selected_metrics: frozenset[str], segment: SegmentInfo | None) -> SiftResult:
+    """A SiftResult without change points, selecting ``selected_metrics`` and ``segment``."""
+    return SiftResult(
+        data=None,
+        selected_metrics=selected_metrics,
+        filtered_no_change=frozenset(),
+        filtered_no_change_points=frozenset(),
+        filtered_out_of_segment=frozenset(),
+        segments=[] if segment is None else [segment],
+        selected_segment=segment,
+    )
 
 
 @pytest.fixture
@@ -48,6 +63,100 @@ class TestPlotSiftedMetrics:
         assert len(ax_after.lines) > len(result.selected_metrics)
         # The selected segment is shaded as a band (a Polygon patch from axvspan).
         assert len(ax_after.patches) >= 1
+
+    def test_markers_band_and_legend_on_both_panels(self, result_and_data):
+        result, data = result_and_data
+        fig = plot.plot_sifted_metrics(result, data)
+        ax_before, ax_after = fig.axes
+        positions = plot._change_point_positions(result)
+
+        for ax, n_series in ((ax_before, data.shape[1]), (ax_after, len(result.selected_metrics))):
+            markers = ax.lines[n_series:]
+            assert [ln.get_xdata()[0] for ln in markers] == [data.index[p] for p in positions]
+            assert len(ax.patches) == 1
+        assert ax_before.get_legend() is None
+        assert sorted(t.get_text() for t in ax_after.get_legend().get_texts()) == sorted(result.selected_metrics)
+        assert ax_before.get_title() == f"Before sift ({data.shape[1]} metrics)"
+        assert ax_after.get_title() == "After sift (3 metrics)"
+        assert ax_after.get_xlabel() == "time"
+
+    def test_no_selection_draws_no_legend_band_or_markers(self):
+        data = pd.DataFrame({"a": [1.0] * 30, "b": [2.0] * 30})
+        result = Sifter(n_jobs=1).sift(data)
+        fig = plot.plot_sifted_metrics(result, data)
+        ax_before, ax_after = fig.axes
+
+        assert len(ax_before.lines) == 2
+        assert len(ax_after.lines) == 0
+        assert ax_after.get_title() == "After sift (0 metrics)"
+        assert ax_after.get_legend() is None
+        assert len(ax_before.patches) == len(ax_after.patches) == 0
+
+    def test_out_of_range_positions_and_segment_are_skipped(self):
+        data = pd.DataFrame({"a": np.arange(10.0), "b": np.arange(10.0)[::-1]})
+        segment = SegmentInfo(label=0, metrics=frozenset({"a"}), start_index=3, end_index=12, selected=True)
+        result = SiftResult(
+            data=None,
+            selected_metrics=frozenset({"a"}),
+            filtered_no_change=frozenset(),
+            filtered_no_change_points=frozenset(),
+            filtered_out_of_segment=frozenset(),
+            metric_to_change_points={"a": [-1, 3, 10], "b": [9, 25]},
+            segments=[segment],
+            selected_segment=segment,
+        )
+        fig = plot.plot_sifted_metrics(result, data)
+        ax_before, ax_after = fig.axes
+
+        # Only positions 3 and 9 lie on the 10-row axis.
+        assert [ln.get_xdata()[0] for ln in ax_before.lines[2:]] == [3, 9]
+        assert [ln.get_xdata()[0] for ln in ax_after.lines[1:]] == [3, 9]
+        # The segment ends past the axis, so no band is drawn.
+        assert len(ax_before.patches) == len(ax_after.patches) == 0
+
+    def test_segment_band_spans_the_selected_segment(self):
+        data = pd.DataFrame({"a": np.arange(10.0)})
+        segment = SegmentInfo(label=0, metrics=frozenset({"a"}), start_index=2, end_index=5, selected=True)
+        result = SiftResult(
+            data=None,
+            selected_metrics=frozenset({"a"}),
+            filtered_no_change=frozenset(),
+            filtered_no_change_points=frozenset(),
+            filtered_out_of_segment=frozenset(),
+            metric_to_change_points={"a": [2, 5]},
+            segments=[segment],
+            selected_segment=segment,
+        )
+        fig = plot.plot_sifted_metrics(result, data)
+
+        for ax in fig.axes:
+            (band,) = ax.patches
+            # Data-x extent of the band (a Rectangle or a Polygon, by matplotlib version).
+            xs = band.get_patch_transform().transform(band.get_path().vertices)[:, 0]
+            assert (xs.min(), xs.max()) == (2.0, 5.0)
+
+    def test_series_and_legend_follow_column_order(self):
+        columns = ["zeta", "alpha", "mid", "beta"]
+        data = pd.DataFrame({column: np.arange(10.0) * (i + 1) for i, column in enumerate(columns)})
+        result = _handbuilt_result(frozenset({"zeta", "beta", "alpha"}), segment=None)
+        fig = plot.plot_sifted_metrics(result, data)
+        ax_before, ax_after = fig.axes
+
+        assert [list(ln.get_ydata()) for ln in ax_before.lines] == [list(data[c]) for c in columns]
+        # Column order, not name order.
+        expected = ["zeta", "alpha", "beta"]
+        assert [ln.get_label() for ln in ax_after.lines] == expected
+        assert [list(ln.get_ydata()) for ln in ax_after.lines] == [list(data[c]) for c in expected]
+        assert [t.get_text() for t in ax_after.get_legend().get_texts()] == expected
+
+    @pytest.mark.parametrize("start, end", [(-1, 4), (2, -1), (-3, -1)])
+    def test_segment_with_a_negative_index_is_not_shaded(self, start, end):
+        data = pd.DataFrame({"a": np.arange(10.0)})
+        segment = SegmentInfo(label=0, metrics=frozenset({"a"}), start_index=start, end_index=end, selected=True)
+        fig = plot.plot_sifted_metrics(_handbuilt_result(frozenset({"a"}), segment), data)
+
+        # A negative index would wrap around to the end of the axis instead of being skipped.
+        assert [len(ax.patches) for ax in fig.axes] == [0, 0]
 
 
 class TestPlotChangePointDensity:

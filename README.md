@@ -371,13 +371,15 @@ uv build
 
 CI measures Cognitive and Cyclomatic Complexity with
 [cccc](https://github.com/moznion/cccc) on pull requests and pushes to `main`
-and writes the totals and the 20 most complex functions to the job summary
-(`.github/workflows/complexity.yml`). It only reports; no complexity
-threshold fails the build. `cccc.toml` sets what is analyzed: tests, generated
-code and vendored sources are excluded. To see the same ranking locally,
-install cccc (a [release binary](https://github.com/moznion/cccc/releases) or
-`cargo install cccc-cli`) and run `cccc --table --top-cognitive 20 .` from the
-repository root.
+(`.github/workflows/complexity.yml`) and fails when a function's cognitive
+complexity exceeds `max-cognitive` in `cccc.toml`; the job summary lists the
+functions above it and the 20 most complex ones. The threshold is 15,
+SonarSource's default: split a function that would exceed it rather than
+raising the threshold. `cccc.toml` also lists what is not analyzed: the tests
+and `experiments/`. To check locally, install cccc (a [release
+binary](https://github.com/moznion/cccc/releases) or `cargo install cccc-cli`)
+and run `cccc --table --top-cognitive 20 .` from the repository root, which
+ranks the most complex functions and fails the same way.
 
 ### Publishing to PyPI
 
