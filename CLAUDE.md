@@ -19,6 +19,9 @@ black .
 
 # Lint
 ruff check .
+
+# Complexity ranking (needs cccc, https://github.com/moznion/cccc; settings in cccc.toml)
+cccc --table --top-cognitive 20 .
 ```
 
 ## Code Style
