@@ -11,5 +11,6 @@ exclude = [
 ]
 
 # Fail when a function's cognitive complexity exceeds this: 15 is SonarSource's
-# default. Split a function that exceeds it rather than raising the threshold.
+# default. Split a function that would exceed it rather than raising the
+# threshold.
 max-cognitive = 15
