@@ -1,0 +1,60 @@
+{
+  "repository": "ai4sre/metricsifter/complexity",
+  "ref": "refs/heads/main",
+  "commit": "a437a72056d5a5857be2fe8c714ac941bcbc0773",
+  "base_ref": "refs/heads/main",
+  "timestamp": "2026-11-05T13:07:41.629047965Z",
+  "custom_metrics": [
+    {
+      "key": "code_complexity",
+      "name": "Code Complexity",
+      "metrics": [
+        {
+          "key": "function_count",
+          "name": "Function count",
+          "value": 91
+        },
+        {
+          "key": "cognitive_sum",
+          "name": "Cognitive: total",
+          "value": 352
+        },
+        {
+          "key": "cognitive_max",
+          "name": "Cognitive: max",
+          "value": 15
+        },
+        {
+          "key": "cognitive_median",
+          "name": "Cognitive: median",
+          "value": 3
+        },
+        {
+          "key": "cognitive_p90",
+          "name": "Cognitive: p90",
+          "value": 9
+        },
+        {
+          "key": "cyclomatic_sum",
+          "name": "Cyclomatic: total",
+          "value": 360
+        },
+        {
+          "key": "cyclomatic_max",
+          "name": "Cyclomatic: max",
+          "value": 10
+        },
+        {
+          "key": "cyclomatic_median",
+          "name": "Cyclomatic: median",
+          "value": 3
+        },
+        {
+          "key": "cyclomatic_p90",
+          "name": "Cyclomatic: p90",
+          "value": 8
+        }
+      ]
+    }
+  ]
+}
