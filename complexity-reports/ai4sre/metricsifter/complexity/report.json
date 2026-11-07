@@ -1,9 +1,9 @@
 {
   "repository": "ai4sre/metricsifter/complexity",
   "ref": "refs/heads/main",
-  "commit": "a437a72056d5a5857be2fe8c714ac941bcbc0773",
+  "commit": "e2bfa3317a6191127c69f83e2281939935b1ed1f",
   "base_ref": "refs/heads/main",
-  "timestamp": "2026-11-05T13:07:41.629047965Z",
+  "timestamp": "2026-11-07T11:29:26.493505574Z",
   "custom_metrics": [
     {
       "key": "code_complexity",
@@ -17,7 +17,7 @@
         {
           "key": "cognitive_sum",
           "name": "Cognitive: total",
-          "value": 352
+          "value": 358
         },
         {
           "key": "cognitive_max",
@@ -37,12 +37,12 @@
         {
           "key": "cyclomatic_sum",
           "name": "Cyclomatic: total",
-          "value": 360
+          "value": 365
         },
         {
           "key": "cyclomatic_max",
           "name": "Cyclomatic: max",
-          "value": 10
+          "value": 11
         },
         {
           "key": "cyclomatic_median",
