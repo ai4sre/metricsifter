@@ -17,7 +17,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Callable
+from typing import Any, Callable
 
 from metricsifter.sifter import Sifter
 from metricsifter.types import SegmentCandidate, SiftResult
@@ -82,7 +82,7 @@ class SifterTransformer:
         """Return constructor parameters (``deep`` accepted for API parity)."""
         return {name: getattr(self, name) for name in _PARAM_NAMES}
 
-    def set_params(self, **params) -> "SifterTransformer":
+    def set_params(self, **params: Any) -> "SifterTransformer":
         """Set constructor parameters in place and return ``self``."""
         for key, value in params.items():
             if key not in _PARAM_NAMES:
@@ -107,7 +107,7 @@ class SifterTransformer:
         )
 
     @staticmethod
-    def _check_dataframe(X) -> pd.DataFrame:
+    def _check_dataframe(X: object) -> pd.DataFrame:
         if not isinstance(X, pd.DataFrame):
             raise ValueError(
                 f"SifterTransformer requires a pandas DataFrame, got {type(X).__name__}. "
@@ -115,7 +115,7 @@ class SifterTransformer:
             )
         return X
 
-    def fit(self, X, y=None) -> "SifterTransformer":
+    def fit(self, X: pd.DataFrame, y: object = None) -> "SifterTransformer":
         """Run the sift on ``X`` and remember the selected metrics.
 
         ``y`` is ignored (accepted for Pipeline compatibility).
@@ -131,7 +131,7 @@ class SifterTransformer:
         self.n_features_in_ = X.shape[1]
         return self
 
-    def transform(self, X) -> pd.DataFrame:
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         """Return the fitted selected columns from ``X``.
 
         Raises a clear ``ValueError`` (never a bare ``KeyError``) when ``X`` is
@@ -149,6 +149,6 @@ class SifterTransformer:
             )
         return X.loc[:, self.selected_metrics_]
 
-    def fit_transform(self, X, y=None) -> pd.DataFrame:
+    def fit_transform(self, X: pd.DataFrame, y: object = None) -> pd.DataFrame:
         """Convenience: ``fit(X).transform(X)``."""
         return self.fit(X, y).transform(X)

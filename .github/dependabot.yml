@@ -1,0 +1,32 @@
+# Version updates arrive monthly, grouped into one PR per ecosystem, and only
+# after a release has been public for a week (compromised releases are usually
+# pulled within days). Security updates are not delayed by this schedule.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # pyproject.toml + uv.lock of the root project. The experiments extra keeps
+  # its upper bounds there (scikit-learn<1.2, numpy<2 for the pinned PyRCA), so
+  # updates stay inside the paper's environment. experiments/requirements.txt
+  # (that extra plus a PyRCA Git pin, kept for reproducibility) is not tracked.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+    groups:
+      python-dependencies:
+        patterns: ["*"]

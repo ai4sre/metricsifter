@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, field
+from typing import Any
 
 import pandas as pd
 
@@ -287,7 +288,7 @@ class SiftResult:
             "bandwidth_tuning": _optional_to_dict(self.bandwidth_tuning),
         }
 
-    def to_json(self, **kwargs) -> str:
+    def to_json(self, **kwargs: Any) -> str:
         """Serialize to a JSON string. Extra kwargs are forwarded to ``json.dumps``."""
         kwargs.setdefault("ensure_ascii", False)
         return json.dumps(self.to_dict(), **kwargs)

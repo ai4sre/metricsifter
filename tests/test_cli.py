@@ -102,6 +102,17 @@ class TestInputErrors:
         code = cli.main(["run", str(empty)])
         assert code == cli.EXIT_INPUT_ERROR
 
+    @pytest.mark.parametrize("bad_column", [["2024-01-01", "2024-01-02", "2024-01-03"], ["True", "False", "True"]])
+    def test_non_numeric_column_returns_exit_2(self, tmp_path, capsys, bad_column):
+        # e.g. a time column read without --index-col: an input error, not a traceback.
+        path = tmp_path / "mixed.csv"
+        pd.DataFrame({"time": bad_column, "metric": [1.0, 2.0, 9.0]}).to_csv(path, index=False)
+
+        code = cli.main(["run", str(path), "--n-jobs", "1"])
+
+        assert code == cli.EXIT_INPUT_ERROR
+        assert "non-numeric column(s) ['time']" in capsys.readouterr().err
+
     def test_bad_arguments_exit_2(self):
         # argparse exits with code 2 on unknown args.
         with pytest.raises(SystemExit) as excinfo:

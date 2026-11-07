@@ -77,13 +77,14 @@ def from_query_range(response: dict, *, label_sep: str = ",") -> pd.DataFrame:
         values = item.get("values", [])
 
         base_name = _canonical_column_name(metric, label_sep)
-        # Deterministically disambiguate accidental name collisions.
-        if base_name in used_names:
-            used_names[base_name] += 1
-            column = f"{base_name}#{used_names[base_name]}"
-        else:
-            used_names[base_name] = 0
-            column = base_name
+        # Deterministically disambiguate accidental name collisions, skipping any
+        # name an earlier column already took (e.g. a series literally named "a#1").
+        n = used_names.get(base_name, -1) + 1
+        column = base_name if n == 0 else f"{base_name}#{n}"
+        while column in column_to_labels:
+            n += 1
+            column = f"{base_name}#{n}"
+        used_names[base_name] = n
 
         timestamps = pd.to_datetime([v[0] for v in values], unit="s", utc=True)
         floats = [float(v[1]) for v in values]

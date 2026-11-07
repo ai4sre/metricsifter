@@ -117,6 +117,21 @@ def _run(args: argparse.Namespace) -> int:
         print(f"error: input {args.input!r} has no metric columns.", file=sys.stderr)
         return EXIT_INPUT_ERROR
 
+    # Every column is sifted as a metric, so text (typically a time column read
+    # without --index-col) or True/False columns are input errors, not tracebacks.
+    non_numeric = [
+        str(column)
+        for column, dtype in data.dtypes.items()
+        if not pd.api.types.is_numeric_dtype(dtype) or pd.api.types.is_bool_dtype(dtype)
+    ]
+    if non_numeric:
+        print(
+            f"error: input {args.input!r} has non-numeric column(s) {non_numeric}; "
+            "pass --index-col for a time/index column.",
+            file=sys.stderr,
+        )
+        return EXIT_INPUT_ERROR
+
     sifter = Sifter(
         search_method=args.search_method,
         penalty_adjust=args.penalty_adjust,

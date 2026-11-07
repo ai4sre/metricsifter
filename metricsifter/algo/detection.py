@@ -3,10 +3,10 @@ from collections import defaultdict
 from typing import Final
 
 import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import ruptures as rpt
 from joblib import Parallel, delayed
+from ruptures.base import BaseEstimator
 from ruptures.exceptions import BadSegmentationParameters
 
 NO_CHANGE_POINTS: Final[int] = -1
@@ -88,7 +88,7 @@ def _estimate_sigma(core: np.ndarray, sigma_estimator: str) -> float:
     return sigma
 
 
-def _detect_changepoints_with_missing_values(x: np.ndarray) -> npt.ArrayLike:
+def _detect_changepoints_with_missing_values(x: np.ndarray) -> np.ndarray:
     """
     Detect changepoints with missing values
     Sample:
@@ -134,7 +134,7 @@ def _validate_search_method(search_method: str) -> None:
         raise ValueError(f"search_method={search_method} is not supported.")
 
 
-def _build_searcher(search_method: str, cost_model: str):
+def _build_searcher(search_method: str, cost_model: str) -> BaseEstimator:
     _validate_search_method(search_method)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

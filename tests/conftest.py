@@ -4,9 +4,28 @@ All data uses a fixed seed so that change-point classification is deterministic
 and does not depend on the pyrca-based generator.
 """
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
+from hypothesis import settings
+
+# Hypothesis profiles for the property-based tests (tests/test_properties.py).
+# "deterministic" is what `make test` and every CI test job run: derandomized
+# (the same examples on every run, so a red build is never a coin flip) and
+# bounded. "fuzz" is for exploration (`make test-fuzz`, the scheduled CI job):
+# fresh random examples, a larger budget (HYPOTHESIS_MAX_EXAMPLES), and the
+# example database (.hypothesis/) so that a failure replays on the next run.
+# No deadline in either profile: the machine load decides the wall time of a
+# sift. print_blob prints a @reproduce_failure decorator for every failure.
+settings.register_profile(
+    "deterministic", max_examples=40, derandomize=True, database=None, deadline=None, print_blob=True
+)
+settings.register_profile(
+    "fuzz", max_examples=int(os.environ.get("HYPOTHESIS_MAX_EXAMPLES", "1000")), deadline=None, print_blob=True
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "deterministic"))
 
 
 def make_synthetic(as_datetime: bool = False) -> pd.DataFrame:
