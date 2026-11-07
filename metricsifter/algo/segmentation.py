@@ -63,7 +63,7 @@ def compute_kde_density(
     x = np.array(change_points, dtype=int)
     if x.std() == 0.0:
         return None
-    dens = KDEUnivariate(x)
+    dens = KDEUnivariate(np.sort(x))  # sorted as in segment_changepoints_with_kde
     dens.fit(kernel="gau", bw=kde_bandwidth, fft=True)
     s = np.linspace(start=0, stop=time_series_length - 1, num=time_series_length)
     e = dens.evaluate(s)
@@ -85,7 +85,11 @@ def segment_changepoints_with_kde(
             0: np.unique(x) if unique_values else x
         }  # the all change points belongs to cluster 0.
 
-    dens = KDEUnivariate(x)
+    # Fit on the sorted change points: the KDE's binning sums in input order, and
+    # the input order follows the column order of the data, so without sorting a
+    # rounding difference could split a flat valley for one column order and not
+    # for another.
+    dens = KDEUnivariate(np.sort(x))
     dens.fit(kernel="gau", bw=kde_bandwidth, fft=True)
     s = np.linspace(start=0, stop=time_series_length - 1, num=time_series_length)
     e = dens.evaluate(s)

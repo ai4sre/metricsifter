@@ -11,6 +11,7 @@ All functions take a :class:`SiftResult` and return matplotlib artists
 
 from __future__ import annotations
 
+from types import ModuleType
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -29,7 +30,7 @@ _INSTALL_HINT = (
 )
 
 
-def _require_matplotlib():
+def _require_matplotlib() -> ModuleType:
     """Import matplotlib lazily, raising a clear install hint on failure."""
     try:
         import matplotlib.pyplot as plt

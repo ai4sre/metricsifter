@@ -1,5 +1,5 @@
 import math
-from typing import Callable
+from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -439,7 +439,7 @@ class Sifter:
     @staticmethod
     def _build_candidate(
         label: int,
-        metrics,
+        metrics: Iterable[str],
         metric_to_cps: dict[str, list[int]],
         label_to_change_points: dict | None = None,
     ) -> SegmentCandidate:

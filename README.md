@@ -317,8 +317,8 @@ metricsifter run input.csv --index-col 0 --parse-dates
 metricsifter run input.csv --penalty-adjust auto --bandwidth auto --random-state 0 --report report.json
 ```
 
-Exit codes: `0` on success, `2` on input errors (missing/empty/unparseable CSV, or bad
-arguments).
+Exit codes: `0` on success, `2` on input errors (missing/empty/unparseable CSV, a
+non-numeric column such as a time column without `--index-col`, or bad arguments).
 
 ## Agent Integration
 
@@ -347,18 +347,26 @@ uv pip install --python .venv-experiments/bin/python -r experiments/requirements
 uv run pytest -s -vv tests
 ```
 
-CI runs on every push and pull request. It executes the complete `tests` suite on
-Python 3.10, 3.11, 3.12, 3.13, and 3.14. A separate quality job verifies the lock file,
-Ruff, and Black, and the package job builds a wheel and tests its import and CLI from a
-fresh environment outside the source checkout.
+CI runs on pull requests, pushes to `main`, weekly, and on demand. It executes the
+complete `tests` suite on Python 3.10, 3.11, 3.12, 3.13, and 3.14. A separate quality job
+verifies the lock file, Ruff, Black, and mypy, and the package job builds a wheel and tests
+its import and CLI from a fresh environment outside the source checkout. The suite includes
+property-based tests (Hypothesis, `tests/test_properties.py`) that run deterministically;
+the weekly run also explores them with fresh random inputs (`make test-fuzz`). The
+`Security` workflow runs CodeQL and scans `uv.lock` with osv-scanner.
 
 ### Code Quality
 
 ```bash
-# Verify the same quality gates as CI
+# The local pre-PR gate: lock file, Ruff, Black, mypy, tests, build, and the
+# workflow audit (actionlint and zizmor; needs Go). `make help` lists all targets.
+make check
+
+# Or the individual quality gates of the CI quality job
 uv lock --check
 uv run ruff check .
 uv run black --check .
+uv run mypy metricsifter tests
 
 # Apply the formatter locally
 uv run black .
@@ -422,7 +430,7 @@ tag/version check, build, and fresh-environment wheel smoke test have succeeded.
 3. **Commit and tag the release**
    ```bash
    git add pyproject.toml uv.lock
-   git commit -m "Bump version to X.Y.Z"
+   git commit -m "chore(release): prepare vX.Y.Z"
    git tag vX.Y.Z
    git push origin main
    git push origin vX.Y.Z

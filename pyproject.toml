@@ -41,9 +41,11 @@ viz = [
 dev = [
     "black",
     "ruff",
+    "mypy",
     "coverage",
     "packaging",
     "pytest",
+    "hypothesis",
     "setuptools",
     "matplotlib>=3.7",
     "scikit-learn>=1.5",
