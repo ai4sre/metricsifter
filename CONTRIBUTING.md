@@ -17,9 +17,9 @@ Thanks for helping with MetricSifter.
   `SiftResult` report updates README.md.
 - **Leave `experiments/` alone** unless the change is about the paper's
   experiments; it has its own environment (see `experiments/README.md`).
-- **Commit style:** short prefixed subjects such as `fix: …`, `feat: …`,
-  `docs: …`, `ci: …`, `chore: …`, with the reason in the body.
+- **Commit style:** commits, branches and pull request titles follow the Git
+  conventions in [AGENTS.md](AGENTS.md#git-conventions).
 
-The full command list, conventions and compatibility contracts are in
+The conventions, the checks to run and the compatibility contracts are in
 [AGENTS.md](AGENTS.md). Security issues go through [SECURITY.md](SECURITY.md),
 not public issues.

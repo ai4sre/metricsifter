@@ -430,7 +430,7 @@ tag/version check, build, and fresh-environment wheel smoke test have succeeded.
 3. **Commit and tag the release**
    ```bash
    git add pyproject.toml uv.lock
-   git commit -m "Bump version to X.Y.Z"
+   git commit -m "chore(release): prepare vX.Y.Z"
    git tag vX.Y.Z
    git push origin main
    git push origin vX.Y.Z

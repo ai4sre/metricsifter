@@ -1,5 +1,5 @@
-# Standard entry points. Each target wraps the uv commands documented in
-# AGENTS.md; `make help` lists them. Python comes from uv: set UV_PYTHON (for
+# Standard entry points. Each target wraps uv commands; `make help` lists
+# them. Python comes from uv: set UV_PYTHON (for
 # example `UV_PYTHON=3.10 make test`) to pick the interpreter.
 
 # Tool versions. CI pins the same versions (.github/workflows); bump together.
