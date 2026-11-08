@@ -1,9 +1,9 @@
 {
   "repository": "ai4sre/metricsifter/complexity",
   "ref": "refs/heads/main",
-  "commit": "e2bfa3317a6191127c69f83e2281939935b1ed1f",
+  "commit": "d0ee9b568593d83a046216acad8dd3d8a1829237",
   "base_ref": "refs/heads/main",
-  "timestamp": "2026-11-07T11:29:26.493505574Z",
+  "timestamp": "2026-11-08T04:20:29.078488546Z",
   "custom_metrics": [
     {
       "key": "code_complexity",
@@ -12,12 +12,12 @@
         {
           "key": "function_count",
           "name": "Function count",
-          "value": 91
+          "value": 92
         },
         {
           "key": "cognitive_sum",
           "name": "Cognitive: total",
-          "value": 358
+          "value": 356
         },
         {
           "key": "cognitive_max",
