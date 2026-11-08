@@ -3,6 +3,8 @@ Extended test suites for Sifter class
 (error handling, parameter variations, edge cases)
 """
 
+import itertools
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -376,6 +378,27 @@ class TestSifterEdgeCases:
 
         assert label is None
         assert metrics == set()
+
+    def test_weighted_max_does_not_depend_on_metric_order(self):
+        """A "weighted_max" score is the same in every iteration order of its
+        metrics, so a tie between segments resolves the same in every run.
+        Segment 0 scores 1 + 1/2 + 1/6 + 1/3 = 2, which naive float addition in
+        some orders (Python < 3.12) gives as 1.9999999999999998; segment 1
+        scores exactly 2 and comes second, so segment 0 must always win."""
+        metric_to_cps = {
+            "a": [10],
+            "b": [10, 30],
+            "c": [10, 30, 50, 70, 90, 110],
+            "d": [10, 30, 50],
+            "e": [80],
+            "f": [80],
+        }
+        sifter = Sifter(segment_selection_method="weighted_max", n_jobs=1)
+        for order in itertools.permutations(["a", "b", "c", "d"]):
+            cluster_label_to_metrics = {0: list(order), 1: ["e", "f"]}
+            label, metrics = sifter.select_largest_segment_with_label(cluster_label_to_metrics, metric_to_cps)
+            assert label == 0, order
+            assert metrics == {"a", "b", "c", "d"}
 
     def test_select_largest_segment_max_method(self):
         """Should work with segment_selection_method='max'"""

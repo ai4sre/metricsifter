@@ -9,6 +9,20 @@ from metricsifter.algo import detection, segmentation
 from metricsifter.algo.detection import SEARCH_METHODS, SIGMA_ESTIMATORS
 from metricsifter.types import BandwidthTuning, PenaltyTuning, Segment, SegmentCandidate, SegmentInfo, SiftResult
 
+
+def _weighted_score(metrics: Iterable[str], metric_to_cps: dict[str, list[int]]) -> float:
+    """The "weighted_max" score of a segment: the sum of 1 / (change points of
+    the metric) over its metrics.
+
+    ``math.fsum`` rounds the sum exactly once, so the score does not depend on
+    the order the metrics are iterated in. They usually come from a ``set``,
+    whose order varies with ``PYTHONHASHSEED``; before Python 3.12, ``sum``
+    adds floats naively and could score a segment as 1.9999999999999998 in one
+    run and 2.0 in another, flipping a tie between segments.
+    """
+    return math.fsum(1 / len(metric_to_cps[m]) for m in metrics)
+
+
 #: KDE bandwidth rule-of-thumb names accepted by ``bandwidth`` (in addition to a float).
 BANDWIDTH_RULES: frozenset[str] = frozenset({"scott", "silverman"})
 
@@ -471,7 +485,7 @@ class Sifter:
             case "max" | "":
                 return float(len(candidate.metrics))
             case "weighted_max":
-                return float(sum(1 / len(candidate.metric_to_cps[m]) for m in candidate.metrics))
+                return _weighted_score(candidate.metrics, candidate.metric_to_cps)
             case _:
                 raise ValueError(f"Unknown segment_selection_method: {method!r}")
 
@@ -535,7 +549,7 @@ class Sifter:
                     if metric_to_cps is None:
                         raise ValueError("metric_to_cps should not be None")
                     choiced_cluster = max(
-                        cluster_label_to_metrics.items(), key=lambda x: sum(1 / len(metric_to_cps[m]) for m in x[1])
+                        cluster_label_to_metrics.items(), key=lambda x: _weighted_score(x[1], metric_to_cps)
                     )
                 case _:
                     raise ValueError(f"Unknown segment_selection_method: {method!r}")
