@@ -3,9 +3,10 @@
 # example `UV_PYTHON=3.10 make test`) to pick the interpreter.
 
 # Tool versions. CI pins the same versions (.github/workflows); bump together.
-ACTIONLINT_VERSION  ?= v1.7.12
-ZIZMOR_VERSION      ?= 1.32.0
-OSV_SCANNER_VERSION ?= v2.7.0
+ACTIONLINT_VERSION      ?= v1.7.12
+ZIZMOR_VERSION          ?= 1.32.0
+GH_ACTIONS_LOCK_VERSION ?= v0.4.1
+OSV_SCANNER_VERSION     ?= v2.7.0
 # Examples per property test for test-fuzz (the deterministic default is in tests/conftest.py).
 HYPOTHESIS_MAX_EXAMPLES ?= 2000
 PYTEST_ARGS ?= -s -vv
@@ -17,9 +18,11 @@ ACTIONLINT  ?= go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VE
 OSV_SCANNER ?= go run github.com/google/osv-scanner/v2/cmd/osv-scanner@$(OSV_SCANNER_VERSION)
 # uvx or pipx (preinstalled on GitHub-hosted runners) runs the pinned zizmor.
 ZIZMOR      ?= $(if $(shell command -v uvx 2>/dev/null),uvx zizmor@$(ZIZMOR_VERSION),pipx run zizmor==$(ZIZMOR_VERSION))
+# gh-actions-lock (the `gh actions-lock` extension) runs through `go run` too.
+GH_ACTIONS_LOCK ?= go run github.com/github/gh-actions-lock/cmd/gh-actions-lock@$(GH_ACTIONS_LOCK_VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help check lint fmt test test-fuzz build lint-actions vuln
+.PHONY: help check lint fmt test test-fuzz build lint-actions lock-actions vuln
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-13s %s\n", $$1, $$2}'
@@ -46,9 +49,17 @@ build: ## Build the sdist and wheel into dist/
 
 # zizmor runs its online audits only with a GitHub token (CI passes one); `make
 # lint-actions GH_TOKEN=` forces offline mode where GitHub's API is unreachable.
-lint-actions: ## Lint (actionlint) and audit (zizmor) the GitHub Actions workflows
+# gh-actions-lock checks that .github/workflows/actions.lock pins every
+# action the workflows use; with GH_TOKEN it also verifies each pin upstream.
+lint-actions: ## Lint (actionlint) and audit (zizmor) the GitHub Actions workflows, and check their lockfile
 	$(ACTIONLINT)
 	$(if $(GH_TOKEN),$(ZIZMOR),env -u GH_TOKEN $(ZIZMOR) --offline) .
+	$(GH_ACTIONS_LOCK) $(if $(GH_TOKEN),--verify,--verify-local)
+
+# Pin the actions in .github/workflows/actions.lock after a `uses:` changed,
+# then review the diff. Needs a GitHub token (GH_TOKEN or `gh auth login`).
+lock-actions: ## Update .github/workflows/actions.lock after changing a uses: line
+	$(GH_ACTIONS_LOCK)
 
 vuln: ## Known vulnerabilities in uv.lock (osv-scanner; exceptions in osv-scanner.toml)
 	$(OSV_SCANNER) scan source --config osv-scanner.toml --lockfile uv.lock

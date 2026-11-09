@@ -359,7 +359,8 @@ the weekly run also explores them with fresh random inputs (`make test-fuzz`). T
 
 ```bash
 # The local pre-PR gate: lock file, Ruff, Black, mypy, tests, build, and the
-# workflow audit (actionlint and zizmor; needs Go). `make help` lists all targets.
+# workflow audit (actionlint, zizmor and the .github/workflows/actions.lock
+# check; needs Go). `make help` lists all targets.
 make check
 
 # Or the individual quality gates of the CI quality job
