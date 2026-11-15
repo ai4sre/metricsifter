@@ -1,5 +1,10 @@
 # MetricSifter: Feature Reduction of Multivariate Time Series Data for Efficient Fault Localization in Cloud Applications
-![CI workflow](https://github.com/ai4sre/metricsifter/actions/workflows/ci.yaml/badge.svg)
+[![AI Generated](https://img.shields.io/badge/AI%20Generated-Claude-orange?logo=anthropic)](https://claude.ai/claude-code)
+[![CI](https://github.com/ai4sre/metricsifter/actions/workflows/ci.yaml/badge.svg)](https://github.com/ai4sre/metricsifter/actions/workflows/ci.yaml)
+[![Security](https://github.com/ai4sre/metricsifter/actions/workflows/security.yml/badge.svg)](https://github.com/ai4sre/metricsifter/actions/workflows/security.yml)
+[![PyPI](https://img.shields.io/pypi/v/metricsifter)](https://pypi.org/project/metricsifter/)
+[![Python versions](https://img.shields.io/pypi/pyversions/metricsifter)](https://pypi.org/project/metricsifter/)
+[![License](https://img.shields.io/github/license/ai4sre/metricsifter)](LICENSE)
 
 This repository contains code and datasets used in the experiments described in our paper [1].
 
